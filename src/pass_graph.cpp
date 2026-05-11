@@ -49,6 +49,25 @@ bool passgraph::Graph::compile() const {
 void passgraph::Graph::execute() const {
   for (const Pass &pass: passes_) {
     // insert pass.barrier whatever
+
+    // // debug log
+    // std::cout << pass.name << " start\n";
+    // std::cout << "accesses:\n";
+    // for (const auto &res: pass.accesses) {
+    //   const auto &resource = resources_[res.id.id];
+    //   std::cout << resource.name << " (" << (resource.type == ResourceType::Buffer ? "buffer" : "image") << ", " <<
+    //       res.pass << "):\n" << "passes it gets written: ";
+    //   for (const auto &pass_id: resource.write_passes) {
+    //     std::cout << pass_id << " ";
+    //   }
+    //   std::cout << "\npasses its gets read in: ";
+    //   for (const auto &pass_id: resource.read_passes) {
+    //     std::cout << pass_id << " ";
+    //   }
+    //   std::cout << "\n\n";
+    // }
+    // std::cout << "executing\n";
     pass.func();
+    // std::cout << pass.name << " end\n\n\n";
   }
 }

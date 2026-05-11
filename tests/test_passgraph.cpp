@@ -14,11 +14,13 @@ TEST(Passgraph, SimpleTest) {
     EXPECT_TRUE(buf);
     EXPECT_TRUE(img);
 
-    graph.add_pass("First").add_storage_output(buf).execute([] {
-        std::cout << "A" << "\n";
-    });
+    graph.add_pass("First")
+            .add_color_attachment(img)
+            .execute([] {
+                std::cout << "A" << "\n";
+            });
 
-    graph.add_pass("Second").add_storage_input(buf).add_color_output(img).execute([] {
+    graph.add_pass("Second").execute([] {
         std::cout << "B" << "\n";
     });
 

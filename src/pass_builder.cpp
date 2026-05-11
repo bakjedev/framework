@@ -2,25 +2,21 @@
 #include "types/pass.hpp"
 #include "pass_graph.hpp"
 
-passgraph::PassBuilder::PassBuilder(Pass *pass, Graph *graph, size_t id) : pass_(pass), graph_(graph),
-                                                                           id_(static_cast<uint32_t>(id)) {
+passgraph::PassBuilder::PassBuilder(Pass *pass, Graph *graph, const size_t id) : pass_(pass), graph_(graph),
+  id_(static_cast<uint32_t>(id)) {
 }
 
-passgraph::PassBuilder &passgraph::PassBuilder::add_color_output(const ResourceID resource) {
-  auto &res = graph_->resources_[resource.id];
-  res.write_passes.push_back(id_);
-  return *this;
+passgraph::PassBuilder &passgraph::PassBuilder::add_color_attachment(const ResourceID resource) {
+  const auto &res = graph_->resources_.at(*resource.id);
+  return add_color_attachment(resource, res.last_writer);
 }
 
-passgraph::PassBuilder &passgraph::PassBuilder::add_storage_input(ResourceID resource) {
-  auto &res = graph_->resources_[resource.id];
-  res.read_passes.push_back(id_);
-  return *this;
-}
+passgraph::PassBuilder &passgraph::PassBuilder::add_color_attachment(const ResourceID resource, const uint32_t pass) {
+  auto &res = graph_->resources_.at(*resource.id);
+  res.write_passes.insert(id_);
 
-passgraph::PassBuilder &passgraph::PassBuilder::add_storage_output(ResourceID resource) {
-  auto &res = graph_->resources_[resource.id];
-  res.write_passes.push_back(id_);
+  pass_->images.emplace_back(resource, pass, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+                             VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
   return *this;
 }
 
