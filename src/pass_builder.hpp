@@ -5,10 +5,12 @@
 #include "types/pass.hpp"
 #include "types/resource.hpp"
 
-namespace passgraph {
+namespace passgraph
+{
   class Graph;
 
-  class PassBuilder {
+  class PassBuilder
+  {
   public:
     explicit PassBuilder(Pass *pass, Graph *graph, size_t id);
 
