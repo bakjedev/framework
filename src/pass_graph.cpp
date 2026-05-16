@@ -1,10 +1,12 @@
 #include "pass_graph.hpp"
+#include <algorithm>
 #include <iostream>
 #include "types/pass.hpp"
 
-passgraph::ResourceID passgraph::Graph::import_image(std::string name, const ImageResource &image, VkImage raw) {
+passgraph::ResourceID passgraph::Graph::import_image(std::string name, const ImageResource& image, VkImage raw)
+{
   if (raw == VK_NULL_HANDLE) {
-    //return ResourceID{};
+    // return ResourceID{};
   }
 
   const auto slot_id = images_.size();
@@ -19,9 +21,10 @@ passgraph::ResourceID passgraph::Graph::import_image(std::string name, const Ima
   return ResourceID{id};
 }
 
-passgraph::ResourceID passgraph::Graph::import_buffer(std::string name, const BufferResource &buffer, VkBuffer raw) {
+passgraph::ResourceID passgraph::Graph::import_buffer(std::string name, const BufferResource& buffer, VkBuffer raw)
+{
   if (raw == VK_NULL_HANDLE) {
-    //return ResourceID{};
+    // return ResourceID{};
   }
 
   const auto slot_id = buffers_.size();
@@ -36,38 +39,69 @@ passgraph::ResourceID passgraph::Graph::import_buffer(std::string name, const Bu
   return ResourceID{id};
 }
 
-passgraph::PassBuilder passgraph::Graph::add_pass(std::string name) {
+passgraph::PassBuilder passgraph::Graph::add_pass(std::string name)
+{
   const auto id = passes_.size();
   passes_.emplace_back().name = std::move(name);
   return PassBuilder{&passes_.back(), this, id};
 }
 
-bool passgraph::Graph::compile() const {
+bool passgraph::Graph::compile() const
+{
+  // --------------
+  // you like DAGs?
+  // --------------
+  std::unordered_map<uint32_t, std::pair<std::unordered_set<uint32_t>, std::unordered_set<uint32_t>>> dag;
+  dag[1].first.insert(0);
+  dag[0].second.insert(1);
+
+  dag[2].first.insert(1);
+
+  dag[1].second.insert(2);
+
+
+  // ----------------
+  // Topological sort
+  // ----------------
+  std::vector<uint32_t> sorted_passes;
+  std::unordered_set<uint32_t> root_nodes;
+
+  // find all nodes with no incoming edges
+  for (const auto& [node, edges]: dag) {
+    if (edges.first.empty()) {
+      root_nodes.insert(node);
+    }
+  }
+
+  // sort
+  while (!root_nodes.empty()) {
+    auto node = root_nodes.extract(root_nodes.begin()).value();
+    sorted_passes.push_back(node);
+
+    auto& node_out = dag[node].second;
+    for (auto out_it = node_out.begin(); out_it != node_out.end();) {
+      // remove edge
+      auto out_node = *out_it;
+      auto& out_node_ins = dag[out_node].first;
+      out_node_ins.erase(out_node_ins.find(node)); // unsafe
+      out_it = node_out.erase(out_it);
+
+      // recurse
+      if (out_node_ins.empty()) {
+        root_nodes.insert(out_node);
+      }
+    }
+  }
+
+  for (const auto& sorted_pass: sorted_passes) {
+    std::cout << sorted_pass << "\n";
+  }
   return true;
 }
 
-void passgraph::Graph::execute() const {
-  for (const Pass &pass: passes_) {
-    // insert pass.barrier whatever
-
-    // // debug log
-    // std::cout << pass.name << " start\n";
-    // std::cout << "accesses:\n";
-    // for (const auto &res: pass.accesses) {
-    //   const auto &resource = resources_[res.id.id];
-    //   std::cout << resource.name << " (" << (resource.type == ResourceType::Buffer ? "buffer" : "image") << ", " <<
-    //       res.pass << "):\n" << "passes it gets written: ";
-    //   for (const auto &pass_id: resource.write_passes) {
-    //     std::cout << pass_id << " ";
-    //   }
-    //   std::cout << "\npasses its gets read in: ";
-    //   for (const auto &pass_id: resource.read_passes) {
-    //     std::cout << pass_id << " ";
-    //   }
-    //   std::cout << "\n\n";
-    // }
-    // std::cout << "executing\n";
+void passgraph::Graph::execute() const
+{
+  for (const Pass& pass: passes_) {
     pass.func();
-    // std::cout << pass.name << " end\n\n\n";
   }
 }

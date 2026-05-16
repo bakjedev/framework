@@ -13,9 +13,9 @@
 namespace passgraph {
   class Graph {
   public:
-    [[nodiscard]] ResourceID import_image(std::string name, const ImageResource &image, VkImage raw);
+    [[nodiscard]] ResourceID import_image(std::string name, const ImageResource& image, VkImage raw);
 
-    [[nodiscard]] ResourceID import_buffer(std::string name, const BufferResource &buffer, VkBuffer raw);
+    [[nodiscard]] ResourceID import_buffer(std::string name, const BufferResource& buffer, VkBuffer raw);
 
     [[nodiscard]] PassBuilder add_pass(std::string name);
 

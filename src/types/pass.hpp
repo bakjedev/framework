@@ -1,7 +1,7 @@
 #pragma once
 #include <functional>
-#include <string>
 #include <optional>
+#include <string>
 #include <vulkan/vulkan.h>
 #include "resource.hpp"
 
