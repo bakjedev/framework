@@ -51,14 +51,74 @@ bool passgraph::Graph::compile() const
   // --------------
   // you like DAGs?
   // --------------
-  std::unordered_map<uint32_t, std::pair<std::unordered_set<uint32_t>, std::unordered_set<uint32_t>>> dag;
-  dag[1].first.insert(0);
-  dag[0].second.insert(1);
+  std::vector<std::pair<std::unordered_set<uint32_t>, std::unordered_set<uint32_t>>> dag{passes_.size() /*2*/};
+  // first = incoming, second = outgoing
 
-  dag[2].first.insert(1);
+  // dag[0].second.insert(1);
+  // dag[1].first.insert(0);
 
-  dag[1].second.insert(2);
 
+  for (const auto& resource: resources_) {
+    std::vector<uint32_t> sorted_writes{resource.write_passes.begin(), resource.write_passes.end()};
+    std::ranges::sort(sorted_writes);
+    const auto write_count = static_cast<uint32_t>(sorted_writes.size());
+
+    std::vector<uint32_t> sorted_reads{resource.read_passes.begin(), resource.read_passes.end()};
+    std::ranges::sort(sorted_reads);
+    const auto read_count = static_cast<uint32_t>(sorted_reads.size());
+
+    // the last pass we accessed the resource and if it was a write or not
+    std::optional<uint32_t> previous_access;
+    bool previous_write = false;
+
+    uint32_t write_idx = 0;
+    uint32_t read_idx = 0;
+    while (write_idx < write_count || read_idx < read_count) {
+      // what pass were accessing and if its a write or not
+      uint32_t current_access;
+      bool current_write = false;
+
+      // check if we still have either a write or a read and if so advance the smallest one
+      if (write_idx < write_count && read_idx < read_count) {
+        if (sorted_writes[write_idx] < sorted_reads[read_idx]) {
+          current_access = sorted_writes[write_idx];
+          current_write = true;
+          write_idx++;
+        } else {
+          current_access = sorted_reads[read_idx];
+          read_idx++;
+        }
+      } else if (write_idx < write_count) {
+        current_access = sorted_writes[write_idx];
+        current_write = true;
+        write_idx++;
+      } else {
+        current_access = sorted_reads[read_idx];
+        read_idx++;
+      }
+
+      if (previous_access.has_value() && *previous_access != current_access) {
+        if (previous_write || current_write) {
+          dag[current_access].first.insert(*previous_access);
+          dag[*previous_access].second.insert(current_access);
+          std::cout << "Inserted edge\n";
+        }
+
+        if (previous_write && current_write) {
+          std::cout << "WAW\n";
+        } else if (previous_write && !current_write) {
+          std::cout << "RAW\n";
+        } else if (!previous_write && current_write) {
+          std::cout << "WAR\n";
+        } else if (!previous_write && !current_write) {
+          std::cout << "RAR - don't care\n";
+        }
+      }
+
+      previous_access = current_access;
+      previous_write = current_write;
+    }
+  }
 
   // ----------------
   // Topological sort
@@ -67,9 +127,9 @@ bool passgraph::Graph::compile() const
   std::unordered_set<uint32_t> root_nodes;
 
   // find all nodes with no incoming edges
-  for (const auto& [node, edges]: dag) {
-    if (edges.first.empty()) {
-      root_nodes.insert(node);
+  for (uint32_t i = 0; i < dag.size(); i++) {
+    if (dag[i].first.empty()) {
+      root_nodes.insert(i);
     }
   }
 
