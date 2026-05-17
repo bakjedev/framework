@@ -67,56 +67,68 @@ bool passgraph::Graph::compile() const
     std::ranges::sort(sorted_reads);
     const auto read_count = static_cast<uint32_t>(sorted_reads.size());
 
-    // the last pass we accessed the resource and if it was a write or not
     std::optional<uint32_t> previous_access;
     bool previous_write = false;
+    bool previous_read = false;
 
     uint32_t write_idx = 0;
     uint32_t read_idx = 0;
     while (write_idx < write_count || read_idx < read_count) {
-      // what pass were accessing and if its a write or not
       uint32_t current_access;
       bool current_write = false;
+      bool current_read = false;
 
-      // check if we still have either a write or a read and if so advance the smallest one
-      if (write_idx < write_count && read_idx < read_count) {
-        if (sorted_writes[write_idx] < sorted_reads[read_idx]) {
-          current_access = sorted_writes[write_idx];
-          current_write = true;
-          write_idx++;
-        } else {
-          current_access = sorted_reads[read_idx];
-          read_idx++;
-        }
-      } else if (write_idx < write_count) {
+      // if we still have a write and a read and they happen in the same pass
+      if (write_idx < write_count && read_idx < read_count && sorted_writes[write_idx] == sorted_reads[read_idx]) {
+        current_access = sorted_writes[write_idx];
+        current_write = true;
+        current_read = true;
+        write_idx++;
+        read_idx++;
+        // if we still have a write and either we have no more reads or the write comes earlier than the read
+      } else if (write_idx < write_count &&
+                 (read_idx >= read_count || sorted_writes[write_idx] < sorted_reads[read_idx])) {
         current_access = sorted_writes[write_idx];
         current_write = true;
         write_idx++;
+        // if we still have a read but no more writes
       } else {
         current_access = sorted_reads[read_idx];
+        current_read = true;
         read_idx++;
       }
 
+      // if we've accessed before and that was in a different pass
       if (previous_access.has_value() && *previous_access != current_access) {
-        if (previous_write || current_write) {
+        const bool raw = previous_write && current_read;
+        const bool waw = previous_write && current_write;
+        const bool war = previous_read && current_write;
+        const bool rar = previous_read && current_read; // don't care
+
+        if (raw || waw || war) {
           dag[current_access].first.insert(*previous_access);
           dag[*previous_access].second.insert(current_access);
           std::cout << "Inserted edge\n";
         }
 
-        if (previous_write && current_write) {
-          std::cout << "WAW\n";
-        } else if (previous_write && !current_write) {
-          std::cout << "RAW\n";
-        } else if (!previous_write && current_write) {
-          std::cout << "WAR\n";
-        } else if (!previous_write && !current_write) {
-          std::cout << "RAR - don't care\n";
+        if (raw) {
+          std::cout << "RAW ";
         }
+        if (waw) {
+          std::cout << "WAW ";
+        }
+        if (war) {
+          std::cout << "WAR ";
+        }
+        if (rar) {
+          std::cout << "RAR ";
+        }
+        std::cout << "\n";
       }
 
       previous_access = current_access;
       previous_write = current_write;
+      previous_read = current_read;
     }
   }
 
