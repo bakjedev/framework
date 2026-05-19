@@ -17,11 +17,11 @@ namespace passgraph {
 
     [[nodiscard]] ResourceID import_buffer(std::string name, const BufferResource& buffer, VkBuffer raw);
 
-    [[nodiscard]] PassBuilder add_pass(std::string name);
+    [[nodiscard]] PassBuilder add_pass(std::string name, QueueFlags queue_flags);
 
     [[nodiscard]] bool compile();
 
-    void execute() const;
+    void execute(VkCommandBuffer cmd) const;
 
   private:
     friend class PassBuilder;

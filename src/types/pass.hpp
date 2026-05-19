@@ -3,6 +3,7 @@
 #include <optional>
 #include <string>
 #include <vulkan/vulkan.h>
+#include "queue_flags.hpp"
 #include "resource.hpp"
 
 namespace passgraph {
@@ -23,10 +24,12 @@ namespace passgraph {
     VkPipelineStageFlags2 stage = VK_PIPELINE_STAGE_2_NONE;
   };
 
+
   struct Pass {
     std::string name;
-    std::function<void()> func;
+    std::function<void(VkCommandBuffer cmd)> func;
     std::vector<ImageAccess> images;
     std::vector<BufferAccess> buffers;
+    QueueFlags queue_flags;
   };
 } // namespace passgraph

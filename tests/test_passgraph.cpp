@@ -18,13 +18,15 @@ TEST(Passgraph, SimpleTest)
   EXPECT_TRUE(buf);
   EXPECT_TRUE(img);
 
-  graph.add_pass("First").add_color_attachment({.resource = img}).execute([] { std::cout << "A" << "\n"; });
+  graph.add_pass("First", passgraph::QueueFlags::Graphics)
+      .add_color_attachment({.resource = img})
+      .execute([](VkCommandBuffer) { std::cout << "A" << "\n"; });
 
-  graph.add_pass("Second").add_color_attachment({.resource = img, .load_op = passgraph::LoadOp::Load}).execute([] {
-    std::cout << "B" << "\n";
-  });
+  graph.add_pass("Second", passgraph::QueueFlags::Graphics)
+      .add_color_attachment({.resource = img, .load_op = passgraph::LoadOp::Load})
+      .execute([](VkCommandBuffer) { std::cout << "B" << "\n"; });
 
   EXPECT_TRUE(graph.compile());
 
-  graph.execute();
+  graph.execute(nullptr);
 }

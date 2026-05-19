@@ -39,10 +39,12 @@ passgraph::ResourceID passgraph::Graph::import_buffer(std::string name, const Bu
   return ResourceID{id};
 }
 
-passgraph::PassBuilder passgraph::Graph::add_pass(std::string name)
+passgraph::PassBuilder passgraph::Graph::add_pass(std::string name, const QueueFlags queue_flags)
 {
   const auto id = passes_.size();
-  passes_.emplace_back().name = std::move(name);
+  Pass& pass = passes_.emplace_back();
+  pass.name = std::move(name);
+  pass.queue_flags = queue_flags;
   return PassBuilder{&passes_.back(), this, id};
 }
 
@@ -175,11 +177,11 @@ bool passgraph::Graph::compile()
   return true;
 }
 
-void passgraph::Graph::execute() const
+void passgraph::Graph::execute(VkCommandBuffer cmd) const
 {
   for (const uint32_t pass_id: sorted_pass_ids_) {
     auto& pass = passes_[pass_id];
     [[maybe_unused]] const auto& dep_inf = pass_dep_infos_[pass_id];
-    pass.func();
+    pass.func(cmd);
   }
 }

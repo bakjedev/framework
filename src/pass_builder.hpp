@@ -1,7 +1,5 @@
 #pragma once
-#include <cstdint>
 #include <functional>
-
 #include "types/pass.hpp"
 #include "types/resource.hpp"
 
@@ -10,7 +8,7 @@ namespace passgraph {
 
   enum class LoadOp { Load, Clear, DontCare };
 
-  struct ColorAttachmentInfo {
+  struct AttachmentInfo {
     ResourceID resource;
     LoadOp load_op = LoadOp::DontCare;
     std::optional<uint32_t> pass = std::nullopt;
@@ -20,9 +18,10 @@ namespace passgraph {
   public:
     explicit PassBuilder(Pass* pass, Graph* graph, size_t id);
 
-    PassBuilder& add_color_attachment(const ColorAttachmentInfo& info);
+    PassBuilder& add_color_attachment(const AttachmentInfo& info);
+    PassBuilder& add_depth_attachment(const AttachmentInfo& info);
 
-    PassBuilder& execute(std::function<void()> func);
+    PassBuilder& execute(std::function<void(VkCommandBuffer)> func);
 
     [[nodiscard]] uint32_t id() const { return id_; }
 
