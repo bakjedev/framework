@@ -52,3 +52,8 @@ if gtest_dep.found()
     tests_exe = executable('passgraph-tests', 'tests/test_passgraph.cpp', dependencies : [gtest_dep, passgraph_dep])
     test('unit', tests_exe, protocol : 'gtest')
 endif
+
+subdir('vendor/vma')
+
+# examples
+subdir('examples/basic')
