@@ -6,6 +6,8 @@
 #include <GLFW/glfw3.h>
 #include <array>
 
+#include "pass_graph.hpp"
+
 #define VK_CHECK(x)                                 \
   do {                                              \
     VkResult err = x;                               \
@@ -346,6 +348,19 @@ int main()
     VK_CHECK(vkCreateImageView(device, &depth_view_create_info, nullptr, &depth_image_view));
   };
 
+  passgraph::Graph graph;
+
+  passgraph::ResourceID swap_chain_image_import = graph.import_image(
+      {.x = window_width,
+       .y = window_height,
+       .z = 0,
+       .format = image_format,
+       .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+       .state = {.access = VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+                 .stage = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                 .layout = VK_IMAGE_LAYOUT_UNDEFINED}},
+      swap_chain_images[0], "Swapchain image");
+
   uint32_t frame_index = 0;
 
   while (!glfwWindowShouldClose(window)) {
@@ -375,6 +390,8 @@ int main()
                                             .pInheritanceInfo = nullptr};
     VK_CHECK(vkBeginCommandBuffer(cmd, &cmd_begin_info));
 
+    graph.update_image_raw(swap_chain_image_import, swap_chain_images[image_index]);
+    
     std::array barriers{
         VkImageMemoryBarrier2{
             .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,

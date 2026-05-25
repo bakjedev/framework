@@ -39,6 +39,34 @@ passgraph::ResourceID passgraph::Graph::import_buffer(const BufferResource& buff
   return ResourceID{id};
 }
 
+bool passgraph::Graph::update_image_raw(const ResourceID resource, VkImage raw)
+{
+  if (!resource.id.has_value()) {
+    return false;
+  }
+  const uint32_t id = *resource.id;
+  if (id >= resources_.size()) {
+    return false;
+  }
+
+  raw_images_[resources_[id].raw] = raw; // sorta unsafe
+  return true;
+}
+
+bool passgraph::Graph::update_buffer_raw(const ResourceID resource, VkBuffer raw)
+{
+  if (!resource.id.has_value()) {
+    return false;
+  }
+  const uint32_t id = *resource.id;
+  if (id >= resources_.size()) {
+    return false;
+  }
+
+  raw_buffers_[resources_[id].raw] = raw; // sorta unsafe
+  return true;
+}
+
 passgraph::PassBuilder passgraph::Graph::add_pass(const QueueFlags queue_flags, std::string name)
 {
   const auto id = passes_.size();

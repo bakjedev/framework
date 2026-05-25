@@ -18,6 +18,9 @@ namespace passgraph {
     [[nodiscard]] ResourceID import_buffer(const BufferResource& buffer, VkBuffer raw,
                                            std::string name = "Unnamed buffer");
 
+    bool update_image_raw(ResourceID resource, VkImage raw);
+    bool update_buffer_raw(ResourceID resource, VkBuffer raw);
+
     [[nodiscard]] PassBuilder add_pass(QueueFlags queue_flags, std::string name = "Unnamed pass");
 
     [[nodiscard]] bool compile();
