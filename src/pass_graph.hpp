@@ -38,9 +38,6 @@ namespace passgraph {
     std::vector<ImageResource> images_;
     std::vector<BufferResource> buffers_;
 
-    std::vector<ImageState> image_states_;
-    std::vector<BufferState> buffer_states_;
-
     std::vector<VkImage> raw_images_;
     std::vector<VkBuffer> raw_buffers_;
 
@@ -48,7 +45,5 @@ namespace passgraph {
 
     std::vector<uint32_t> sorted_pass_ids_;
     std::vector<DependencyInfo> pass_dep_infos_;
-
-    void reset_resource_states();
   };
 } // namespace passgraph

@@ -17,7 +17,7 @@ namespace passgraph {
     VkFormat format;
     VkImageUsageFlags usage;
 
-    ImageState initial_state;
+    ImageState state;
   };
 
 } // namespace passgraph

@@ -6,18 +6,17 @@ TEST(Passgraph, SimpleTest)
   passgraph::Graph graph;
 
   const auto buf = graph.import_buffer(
-      {.size = 0, .usage = 0u, .initial_state = {.access = VK_ACCESS_2_NONE, .stage = VK_PIPELINE_STAGE_2_NONE}},
-      nullptr, "Data");
+      {.size = 0, .usage = 0u, .state = {.access = VK_ACCESS_2_NONE, .stage = VK_PIPELINE_STAGE_2_NONE}}, nullptr,
+      "Data");
 
-  const auto img = graph.import_image({.x = 1920,
-                                       .y = 1080,
-                                       .z = 0,
-                                       .format = VK_FORMAT_R32G32B32A32_SFLOAT,
-                                       .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
-                                       .initial_state = {.access = VK_ACCESS_2_NONE,
-                                                         .stage = VK_PIPELINE_STAGE_2_NONE,
-                                                         .layout = VK_IMAGE_LAYOUT_UNDEFINED}},
-                                      nullptr, "RenderTarget");
+  const auto img = graph.import_image(
+      {.x = 1920,
+       .y = 1080,
+       .z = 0,
+       .format = VK_FORMAT_R32G32B32A32_SFLOAT,
+       .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+       .state = {.access = VK_ACCESS_2_NONE, .stage = VK_PIPELINE_STAGE_2_NONE, .layout = VK_IMAGE_LAYOUT_UNDEFINED}},
+      nullptr, "RenderTarget");
 
   EXPECT_TRUE(buf);
   EXPECT_TRUE(img);

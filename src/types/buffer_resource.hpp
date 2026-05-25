@@ -13,6 +13,6 @@ namespace passgraph {
     VkDeviceSize size;
     VkBufferUsageFlags usage;
 
-    BufferState initial_state;
+    BufferState state;
   };
 } // namespace passgraph

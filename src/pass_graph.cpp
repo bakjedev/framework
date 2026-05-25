@@ -174,7 +174,6 @@ bool passgraph::Graph::compile()
   sorted_pass_ids_ = std::move(sorted_passes);
   pass_dep_infos_.clear();
   pass_dep_infos_.resize(passes_.size());
-  reset_resource_states();
 
   for (const uint32_t pass_id: sorted_pass_ids_) {
     Pass& pass = passes_[pass_id];
@@ -183,11 +182,10 @@ bool passgraph::Graph::compile()
     for (const ImageAccess& image_access: pass.images) {
       const uint32_t resource_id = *image_access.resource.id; // unsafe
       const Resource& resource = resources_[resource_id];
-      const uint32_t slot = resource.slot;
 
       const ImageState new_state{
           .access = image_access.access, .stage = image_access.stage, .layout = image_access.layout};
-      ImageState& old_state = image_states_[slot];
+      ImageState& old_state = images_[resource.slot].state;
 
       if (new_state != old_state) {
         VkImageMemoryBarrier2& barrier = image_barriers.emplace_back(VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2, nullptr);
@@ -207,10 +205,9 @@ bool passgraph::Graph::compile()
     for (const BufferAccess& buffer_access: pass.buffers) {
       const uint32_t resource_id = *buffer_access.resource.id; // unsafe
       const Resource& resource = resources_[resource_id];
-      const uint32_t slot = resource.slot;
 
       const BufferState new_state{.access = buffer_access.access, .stage = buffer_access.stage};
-      BufferState& old_state = buffer_states_[slot];
+      BufferState& old_state = buffers_[resource.slot].state;
 
       if (new_state != old_state) {
         VkBufferMemoryBarrier2& barrier =
@@ -236,22 +233,5 @@ void passgraph::Graph::execute(VkCommandBuffer cmd) const
     [[maybe_unused]] const auto& dep_info = pass_dep_infos_[pass_id];
     if (cmd) vkCmdPipelineBarrier2(cmd, &dep_info.dep_info);
     pass.func(cmd);
-  }
-}
-
-void passgraph::Graph::reset_resource_states()
-{
-  if (image_states_.size() != images_.size()) {
-    image_states_.resize(images_.size());
-  }
-  for (size_t i = 0; i < image_states_.size(); i++) {
-    image_states_[i] = images_[i].initial_state;
-  }
-
-  if (buffer_states_.size() != buffers_.size()) {
-    buffer_states_.resize(buffers_.size());
-  }
-  for (size_t i = 0; i < buffer_states_.size(); i++) {
-    buffer_states_[i] = buffers_[i].initial_state;
   }
 }
