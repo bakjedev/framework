@@ -356,12 +356,24 @@ int main()
        .z = 0,
        .format = image_format,
        .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+       .aspect = VK_IMAGE_ASPECT_COLOR_BIT,
        .state = {.access = VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
                  .stage = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
                  .layout = VK_IMAGE_LAYOUT_UNDEFINED}},
       swap_chain_images[0], "Swapchain image");
 
   uint32_t frame_index = 0;
+
+  graph.add_pass(passgraph::QueueFlags::Graphics, "RenderPass")
+      .add_color_attachment({.resource = swap_chain_image_import})
+      .execute([]([[maybe_unused]] VkCommandBuffer cmd) {
+        // whatever
+        std::cout << "whatever\n";
+      });
+
+  graph.set_image_end_state(
+      swap_chain_image_import,
+      {.access = VK_ACCESS_2_NONE, .stage = VK_PIPELINE_STAGE_2_NONE, .layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR});
 
   while (!glfwWindowShouldClose(window)) {
     VK_CHECK(vkWaitForFences(device, 1, &fences[frame_index], true, UINT64_MAX));
@@ -390,71 +402,13 @@ int main()
                                             .pInheritanceInfo = nullptr};
     VK_CHECK(vkBeginCommandBuffer(cmd, &cmd_begin_info));
 
-    graph.update_image_raw(swap_chain_image_import, swap_chain_images[image_index]);
-    
-    std::array barriers{
-        VkImageMemoryBarrier2{
-            .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-            .pNext = nullptr,
-            .srcStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-            .srcAccessMask = 0,
-            .dstStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-            .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-            .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-            .newLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
-            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-            .image = swap_chain_images[image_index],
-            .subresourceRange{.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                              .baseMipLevel = 0,
-                              .levelCount = 1,
-                              .baseArrayLayer = 0,
-                              .layerCount = 1}},
-        VkImageMemoryBarrier2{.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-                              .pNext = nullptr,
-                              .srcStageMask = VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
-                              .srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-                              .dstStageMask = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT,
-                              .dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-                              .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-                              .newLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
-                              .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-                              .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-                              .image = depth_image,
-                              .subresourceRange{.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT,
-                                                .baseMipLevel = 0,
-                                                .levelCount = 1,
-                                                .baseArrayLayer = 0,
-                                                .layerCount = 1}}};
-    VkDependencyInfo barriers_dep_info{};
-    barriers_dep_info.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-    barriers_dep_info.imageMemoryBarrierCount = barriers.size();
-    barriers_dep_info.pImageMemoryBarriers = barriers.data();
-    vkCmdPipelineBarrier2(cmd, &barriers_dep_info);
+    graph.update_image(
+        swap_chain_image_import, swap_chain_images[image_index],
+        {.access = VK_ACCESS_2_NONE, .stage = VK_PIPELINE_STAGE_2_NONE, .layout = VK_IMAGE_LAYOUT_UNDEFINED});
 
-    // something here
+    graph.compile();
 
-    VkImageMemoryBarrier2 present_barrier{.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-                                          .pNext = nullptr,
-                                          .srcStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-                                          .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-                                          .dstStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-                                          .dstAccessMask = 0,
-                                          .oldLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
-                                          .newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-                                          .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-                                          .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-                                          .image = swap_chain_images[image_index],
-                                          .subresourceRange{.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                                                            .baseMipLevel = 0,
-                                                            .levelCount = 1,
-                                                            .baseArrayLayer = 0,
-                                                            .layerCount = 1}};
-    VkDependencyInfo present_barrier_dep_info{};
-    present_barrier_dep_info.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-    present_barrier_dep_info.imageMemoryBarrierCount = 1;
-    present_barrier_dep_info.pImageMemoryBarriers = &present_barrier;
-    vkCmdPipelineBarrier2(cmd, &present_barrier_dep_info);
+    graph.execute(cmd);
 
     vkEndCommandBuffer(cmd);
 

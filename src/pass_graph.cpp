@@ -11,6 +11,7 @@ passgraph::ResourceID passgraph::Graph::import_image(const ImageResource& image,
 
   const auto slot_id = images_.size();
   images_.push_back(image);
+  end_image_states_.emplace_back();
 
   const auto raw_id = raw_images_.size();
   raw_images_.push_back(raw);
@@ -29,6 +30,7 @@ passgraph::ResourceID passgraph::Graph::import_buffer(const BufferResource& buff
 
   const auto slot_id = buffers_.size();
   buffers_.push_back(buffer);
+  end_buffer_states_.emplace_back();
 
   const auto raw_id = raw_buffers_.size();
   raw_buffers_.push_back(raw);
@@ -39,7 +41,7 @@ passgraph::ResourceID passgraph::Graph::import_buffer(const BufferResource& buff
   return ResourceID{id};
 }
 
-bool passgraph::Graph::update_image_raw(const ResourceID resource, VkImage raw)
+bool passgraph::Graph::update_image(const ResourceID resource, VkImage raw, const ImageState& state)
 {
   if (!resource.id.has_value()) {
     return false;
@@ -49,11 +51,13 @@ bool passgraph::Graph::update_image_raw(const ResourceID resource, VkImage raw)
     return false;
   }
 
-  raw_images_[resources_[id].raw] = raw; // sorta unsafe
+  // sorta unsafe
+  images_[resources_[id].slot].state = state;
+  raw_images_[resources_[id].raw] = raw;
   return true;
 }
 
-bool passgraph::Graph::update_buffer_raw(const ResourceID resource, VkBuffer raw)
+bool passgraph::Graph::update_buffer(const ResourceID resource, VkBuffer raw, const BufferState& state)
 {
   if (!resource.id.has_value()) {
     return false;
@@ -63,7 +67,37 @@ bool passgraph::Graph::update_buffer_raw(const ResourceID resource, VkBuffer raw
     return false;
   }
 
-  raw_buffers_[resources_[id].raw] = raw; // sorta unsafe
+  // sorta unsafe
+  buffers_[resources_[id].slot].state = state;
+  raw_buffers_[resources_[id].raw] = raw;
+  return true;
+}
+
+bool passgraph::Graph::set_image_end_state(const ResourceID resource, const ImageState& state)
+{
+  if (!resource.id.has_value()) {
+    return false;
+  }
+  const uint32_t id = *resource.id;
+  if (id >= resources_.size()) {
+    return false;
+  }
+
+  end_image_states_[resources_[id].slot] = state;
+  return true;
+}
+
+bool passgraph::Graph::set_buffer_end_state(const ResourceID resource, const BufferState& state)
+{
+  if (!resource.id.has_value()) {
+    return false;
+  }
+  const uint32_t id = *resource.id;
+  if (id >= resources_.size()) {
+    return false;
+  }
+
+  end_buffer_states_[resources_[id].slot] = state;
   return true;
 }
 
@@ -133,15 +167,15 @@ bool passgraph::Graph::compile()
         const bool raw = previous_write && current_read;
         const bool waw = previous_write && current_write;
         const bool war = previous_read && current_write;
-        const bool rar = previous_read && current_read; // don't care
+        [[maybe_unused]] const bool rar = previous_read && current_read; // don't care
 
         if (raw || waw || war) {
           dag[current_access].first.insert(*previous_access);
           dag[*previous_access].second.insert(current_access);
-          std::cout << "Inserted edge\n";
+          // std::cout << "Inserted edge\n";
         }
 
-        if (raw) {
+        /*if (raw) {
           std::cout << "RAW ";
         }
         if (waw) {
@@ -153,7 +187,7 @@ bool passgraph::Graph::compile()
         if (rar) {
           std::cout << "RAR ";
         }
-        std::cout << "\n";
+        std::cout << "\n";*/
       }
 
       previous_access = current_access;
@@ -195,9 +229,9 @@ bool passgraph::Graph::compile()
     }
   }
 
-  for (const auto& sorted_pass: sorted_passes) {
-    std::cout << sorted_pass << "\n";
-  }
+  // for (const auto& sorted_pass: sorted_passes) {
+  //   std::cout << sorted_pass << "\n";
+  // }
 
   sorted_pass_ids_ = std::move(sorted_passes);
   pass_dep_infos_.clear();
@@ -213,18 +247,23 @@ bool passgraph::Graph::compile()
 
       const ImageState new_state{
           .access = image_access.access, .stage = image_access.stage, .layout = image_access.layout};
-      ImageState& old_state = images_[resource.slot].state;
+      ImageResource& image = images_[resource.slot];
 
-      if (new_state != old_state) {
+      if (new_state != image.state) {
         VkImageMemoryBarrier2& barrier = image_barriers.emplace_back(VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2, nullptr);
-        barrier.srcStageMask = old_state.stage;
-        barrier.srcAccessMask = old_state.access;
+        barrier.srcStageMask = image.state.stage;
+        barrier.srcAccessMask = image.state.access;
         barrier.dstStageMask = new_state.stage;
         barrier.dstAccessMask = new_state.access;
-        barrier.oldLayout = old_state.layout;
+        barrier.oldLayout = image.state.layout;
         barrier.newLayout = new_state.layout;
         barrier.image = raw_images_[resource.raw];
-        old_state = new_state;
+        barrier.subresourceRange.aspectMask = image.aspect;
+        barrier.subresourceRange.baseArrayLayer = 0;
+        barrier.subresourceRange.baseMipLevel = 0;
+        barrier.subresourceRange.layerCount = 1;
+        barrier.subresourceRange.levelCount = 1;
+        image.state = new_state;
       }
     }
     dep_info.imageMemoryBarrierCount = static_cast<uint32_t>(image_barriers.size());
@@ -250,7 +289,64 @@ bool passgraph::Graph::compile()
     }
     dep_info.bufferMemoryBarrierCount = static_cast<uint32_t>(buffer_barriers.size());
     dep_info.pBufferMemoryBarriers = buffer_barriers.data();
+
+    dep_info.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+    dep_info.dependencyFlags = 0u;
   }
+
+  end_dep_info_.image_barriers.clear();
+  end_dep_info_.buffer_barriers.clear();
+
+  for (const auto& resource: resources_) {
+    switch (resource.type) {
+      case ResourceType::Image: {
+        ImageResource& image = images_[resource.slot];
+        const ImageState& state = end_image_states_[resource.slot].value(); // sorta unsafe
+        end_dep_info_.image_barriers.push_back({.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+                                                .pNext = nullptr,
+                                                .srcStageMask = image.state.stage,
+                                                .srcAccessMask = image.state.access,
+                                                .dstStageMask = state.stage,
+                                                .dstAccessMask = state.access,
+                                                .oldLayout = image.state.layout,
+                                                .newLayout = state.layout,
+                                                .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                                                .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                                                .image = raw_images_[resource.raw],
+                                                .subresourceRange = {.aspectMask = image.aspect,
+                                                                     .baseMipLevel = 0,
+                                                                     .levelCount = 1,
+                                                                     .baseArrayLayer = 0,
+                                                                     .layerCount = 1}});
+        image.state = state;
+        break;
+      }
+      case ResourceType::Buffer: {
+        BufferResource& buffer = buffers_[resource.slot];
+        const BufferState& state = end_buffer_states_[resource.slot].value(); // sorta unsafe
+        end_dep_info_.buffer_barriers.push_back({.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2,
+                                                 .pNext = nullptr,
+                                                 .srcStageMask = buffer.state.stage,
+                                                 .srcAccessMask = buffer.state.access,
+                                                 .dstStageMask = state.stage,
+                                                 .dstAccessMask = state.access,
+                                                 .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                                                 .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                                                 .buffer = raw_buffers_[resource.raw],
+                                                 .offset = 0,
+                                                 .size = buffer.size});
+        buffer.state = state;
+        break;
+      }
+    }
+  }
+  end_dep_info_.dep_info.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+  end_dep_info_.dep_info.bufferMemoryBarrierCount = static_cast<uint32_t>(end_dep_info_.buffer_barriers.size());
+  end_dep_info_.dep_info.pBufferMemoryBarriers = end_dep_info_.buffer_barriers.data();
+  end_dep_info_.dep_info.imageMemoryBarrierCount = static_cast<uint32_t>(end_dep_info_.image_barriers.size());
+  end_dep_info_.dep_info.pImageMemoryBarriers = end_dep_info_.image_barriers.data();
+  end_dep_info_.dep_info.dependencyFlags = 0u;
+
   return true;
 }
 
@@ -258,8 +354,9 @@ void passgraph::Graph::execute(VkCommandBuffer cmd) const
 {
   for (const uint32_t pass_id: sorted_pass_ids_) {
     auto& pass = passes_[pass_id];
-    [[maybe_unused]] const auto& dep_info = pass_dep_infos_[pass_id];
+    const auto& dep_info = pass_dep_infos_[pass_id];
     if (cmd) vkCmdPipelineBarrier2(cmd, &dep_info.dep_info);
     pass.func(cmd);
   }
+  if (cmd) vkCmdPipelineBarrier2(cmd, &end_dep_info_.dep_info);
 }

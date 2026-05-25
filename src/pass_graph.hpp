@@ -18,12 +18,15 @@ namespace passgraph {
     [[nodiscard]] ResourceID import_buffer(const BufferResource& buffer, VkBuffer raw,
                                            std::string name = "Unnamed buffer");
 
-    bool update_image_raw(ResourceID resource, VkImage raw);
-    bool update_buffer_raw(ResourceID resource, VkBuffer raw);
+    bool update_image(ResourceID resource, VkImage raw, const ImageState& state);
+    bool update_buffer(ResourceID resource, VkBuffer raw, const BufferState& state);
+
+    bool set_image_end_state(ResourceID resource, const ImageState& state);
+    bool set_buffer_end_state(ResourceID resource, const BufferState& state);
 
     [[nodiscard]] PassBuilder add_pass(QueueFlags queue_flags, std::string name = "Unnamed pass");
 
-    [[nodiscard]] bool compile();
+    bool compile();
 
     void execute(VkCommandBuffer cmd) const;
 
@@ -48,5 +51,9 @@ namespace passgraph {
 
     std::vector<uint32_t> sorted_pass_ids_;
     std::vector<DependencyInfo> pass_dep_infos_;
+
+    std::vector<std::optional<ImageState>> end_image_states_;
+    std::vector<std::optional<BufferState>> end_buffer_states_;
+    DependencyInfo end_dep_info_;
   };
 } // namespace passgraph

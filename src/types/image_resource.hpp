@@ -16,6 +16,7 @@ namespace passgraph {
     uint32_t z;
     VkFormat format;
     VkImageUsageFlags usage;
+    VkImageAspectFlags aspect;
 
     ImageState state;
   };
