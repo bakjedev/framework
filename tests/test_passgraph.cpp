@@ -1,15 +1,15 @@
 #include <gtest/gtest.h>
-#include "pass_graph.hpp"
+#include "context.hpp"
 
 TEST(Passgraph, SimpleTest)
 {
-  passgraph::Graph graph;
+  passgraph::Context context;
 
-  const auto buf = graph.import_buffer(
+  const auto buf = context.import_buffer(
       {.size = 0, .usage = 0u, .state = {.access = VK_ACCESS_2_NONE, .stage = VK_PIPELINE_STAGE_2_NONE}}, nullptr,
       "Data");
 
-  const auto img = graph.import_image(
+  const auto img = context.import_image(
       {.x = 1920,
        .y = 1080,
        .z = 0,
@@ -21,6 +21,8 @@ TEST(Passgraph, SimpleTest)
 
   EXPECT_TRUE(buf);
   EXPECT_TRUE(img);
+
+  passgraph::Graph graph = context.create_graph();
 
   graph.add_pass(passgraph::QueueFlags::Graphics, "First")
       .add_color_attachment({.resource = img})

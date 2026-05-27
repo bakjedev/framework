@@ -33,7 +33,8 @@ extra_warnings = compiler.get_supported_arguments(
 add_project_arguments(extra_warnings, language : 'cpp')
 
 sources = files(
-    'src/pass_graph.cpp',
+    'src/context.cpp',
+    'src/graph.cpp',
     'src/pass_builder.cpp'
 )
 

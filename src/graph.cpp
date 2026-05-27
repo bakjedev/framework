@@ -1,107 +1,18 @@
-#include "pass_graph.hpp"
+#include "graph.hpp"
 #include <algorithm>
 #include <iostream>
+#include "context.hpp"
 #include "types/pass.hpp"
 
-passgraph::ResourceID passgraph::Graph::import_image(const ImageResource& image, VkImage raw, VkImageView view,
-                                                     std::string name)
+
+void passgraph::Graph::set_image_end_state(const ResourceID resource, const ImageState& state)
 {
-  if (raw == VK_NULL_HANDLE) {
-    // return ResourceID{};
-  }
-
-  const auto slot_id = images_.size();
-  images_.push_back(image);
-  end_image_states_.emplace_back();
-
-  const auto raw_id = raw_images_.size();
-  raw_images_.push_back(raw);
-  raw_image_views_.push_back(view);
-
-  const auto id = resources_.size();
-  resources_.emplace_back(ResourceType::Image, slot_id, raw_id, std::move(name));
-
-  return ResourceID{id};
+  end_image_states_[resource] = state;
 }
 
-passgraph::ResourceID passgraph::Graph::import_buffer(const BufferResource& buffer, VkBuffer raw, std::string name)
+void passgraph::Graph::set_buffer_end_state(const ResourceID resource, const BufferState& state)
 {
-  if (raw == VK_NULL_HANDLE) {
-    // return ResourceID{};
-  }
-
-  const auto slot_id = buffers_.size();
-  buffers_.push_back(buffer);
-  end_buffer_states_.emplace_back();
-
-  const auto raw_id = raw_buffers_.size();
-  raw_buffers_.push_back(raw);
-
-  const auto id = resources_.size();
-  resources_.emplace_back(ResourceType::Buffer, slot_id, raw_id, std::move(name));
-
-  return ResourceID{id};
-}
-
-bool passgraph::Graph::update_image(const ResourceID resource, VkImage raw, VkImageView view, const ImageState& state)
-{
-  if (!resource.id.has_value()) {
-    return false;
-  }
-  const uint32_t id = *resource.id;
-  if (id >= resources_.size()) {
-    return false;
-  }
-
-  // sorta unsafe
-  images_[resources_[id].slot].state = state;
-  raw_images_[resources_[id].raw] = raw;
-  raw_image_views_[resources_[id].raw] = view;
-  return true;
-}
-
-bool passgraph::Graph::update_buffer(const ResourceID resource, VkBuffer raw, const BufferState& state)
-{
-  if (!resource.id.has_value()) {
-    return false;
-  }
-  const uint32_t id = *resource.id;
-  if (id >= resources_.size()) {
-    return false;
-  }
-
-  // sorta unsafe
-  buffers_[resources_[id].slot].state = state;
-  raw_buffers_[resources_[id].raw] = raw;
-  return true;
-}
-
-bool passgraph::Graph::set_image_end_state(const ResourceID resource, const ImageState& state)
-{
-  if (!resource.id.has_value()) {
-    return false;
-  }
-  const uint32_t id = *resource.id;
-  if (id >= resources_.size()) {
-    return false;
-  }
-
-  end_image_states_[resources_[id].slot] = state;
-  return true;
-}
-
-bool passgraph::Graph::set_buffer_end_state(const ResourceID resource, const BufferState& state)
-{
-  if (!resource.id.has_value()) {
-    return false;
-  }
-  const uint32_t id = *resource.id;
-  if (id >= resources_.size()) {
-    return false;
-  }
-
-  end_buffer_states_[resources_[id].slot] = state;
-  return true;
+  end_buffer_states_[resource] = state;
 }
 
 passgraph::PassBuilder passgraph::Graph::add_pass(const QueueFlags queue_flags, std::string name)
@@ -121,12 +32,12 @@ bool passgraph::Graph::compile()
   std::vector<std::pair<std::unordered_set<uint32_t>, std::unordered_set<uint32_t>>> dag{passes_.size()};
   // first = incoming, second = outgoing
 
-  for (const auto& resource: resources_) {
-    std::vector<uint32_t> sorted_writes{resource.write_passes.begin(), resource.write_passes.end()};
+  for (const auto& [_, info]: resource_infos_) {
+    std::vector<uint32_t> sorted_writes{info.write_passes.begin(), info.write_passes.end()};
     std::ranges::sort(sorted_writes);
     const auto write_count = static_cast<uint32_t>(sorted_writes.size());
 
-    std::vector<uint32_t> sorted_reads{resource.read_passes.begin(), resource.read_passes.end()};
+    std::vector<uint32_t> sorted_reads{info.read_passes.begin(), info.read_passes.end()};
     std::ranges::sort(sorted_reads);
     const auto read_count = static_cast<uint32_t>(sorted_reads.size());
 
@@ -219,7 +130,6 @@ bool passgraph::Graph::compile()
   // --------------------
   // Create pass barriers
   // --------------------
-  pass_dep_infos_.clear();
   pass_dep_infos_.resize(passes_.size());
 
   for (const uint32_t pass_id: sorted_pass_ids_) {
@@ -231,12 +141,10 @@ bool passgraph::Graph::compile()
 
     // image memory barriers
     for (const ImageAccess& image_access: pass.images) {
-      const uint32_t resource_id = *image_access.resource.id; // unsafe
-      const Resource& resource = resources_[resource_id];
-
       const ImageState new_state{
           .access = image_access.access, .stage = image_access.stage, .layout = image_access.layout};
-      ImageResource& image = images_[resource.slot];
+      const Resource& resource = context_->resources_.at(*image_access.resource.id); // sorta unsafe
+      ImageResource& image = context_->images_.at(resource.slot);
 
       if (new_state != image.state) {
         VkImageMemoryBarrier2& barrier = image_barriers.emplace_back(VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2, nullptr);
@@ -246,7 +154,7 @@ bool passgraph::Graph::compile()
         barrier.dstAccessMask = new_state.access;
         barrier.oldLayout = image.state.layout;
         barrier.newLayout = new_state.layout;
-        barrier.image = raw_images_[resource.raw];
+        barrier.image = context_->raw_images_.at(resource.raw);
         barrier.subresourceRange.aspectMask = image.aspect;
         barrier.subresourceRange.baseArrayLayer = 0;
         barrier.subresourceRange.baseMipLevel = 0;
@@ -260,21 +168,19 @@ bool passgraph::Graph::compile()
 
     // buffer memory barriers
     for (const BufferAccess& buffer_access: pass.buffers) {
-      const uint32_t resource_id = *buffer_access.resource.id; // unsafe
-      const Resource& resource = resources_[resource_id];
-
       const BufferState new_state{.access = buffer_access.access, .stage = buffer_access.stage};
-      BufferState& old_state = buffers_[resource.slot].state;
+      const Resource& resource = context_->resources_.at(*buffer_access.resource.id); // sorta unsafe
+      BufferResource& buffer = context_->buffers_.at(resource.slot);
 
-      if (new_state != old_state) {
+      if (new_state != buffer.state) {
         VkBufferMemoryBarrier2& barrier =
             buffer_barriers.emplace_back(VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2, nullptr);
-        barrier.srcStageMask = old_state.stage;
-        barrier.srcAccessMask = old_state.access;
+        barrier.srcStageMask = buffer.state.stage;
+        barrier.srcAccessMask = buffer.state.access;
         barrier.dstStageMask = new_state.stage;
         barrier.dstAccessMask = new_state.access;
-        barrier.buffer = raw_buffers_[resource.raw];
-        old_state = new_state;
+        barrier.buffer = context_->raw_buffers_.at(resource.raw);
+        buffer.state = new_state;
       }
     }
     dep_info.bufferMemoryBarrierCount = static_cast<uint32_t>(buffer_barriers.size());
@@ -284,60 +190,48 @@ bool passgraph::Graph::compile()
   // -------------------
   // Create end barriers
   // -------------------
-  end_dep_info_.image_barriers.clear();
-  end_dep_info_.buffer_barriers.clear();
   end_dep_info_.dep_info.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
   end_dep_info_.dep_info.dependencyFlags = 0u;
 
-  for (const auto& resource: resources_) {
-    switch (resource.type) {
-      case ResourceType::Image: {
-        ImageResource& image = images_[resource.slot];
-        const auto& state_optional = end_image_states_[resource.slot];
-        if (!state_optional) break;
-        const ImageState& state = state_optional.value();
+  for (const auto& [id, state]: end_image_states_) {
+    const Resource& resource = context_->resources_[*id.id];
+    ImageResource& image = context_->images_[resource.slot];
 
-        end_dep_info_.image_barriers.push_back({.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-                                                .pNext = nullptr,
-                                                .srcStageMask = image.state.stage,
-                                                .srcAccessMask = image.state.access,
-                                                .dstStageMask = state.stage,
-                                                .dstAccessMask = state.access,
-                                                .oldLayout = image.state.layout,
-                                                .newLayout = state.layout,
-                                                .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-                                                .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-                                                .image = raw_images_[resource.raw],
-                                                .subresourceRange = {.aspectMask = image.aspect,
-                                                                     .baseMipLevel = 0,
-                                                                     .levelCount = 1,
-                                                                     .baseArrayLayer = 0,
-                                                                     .layerCount = 1}});
-        image.state = state;
-        break;
-      }
-      case ResourceType::Buffer: {
-        BufferResource& buffer = buffers_[resource.slot];
-        const auto& state_optional = end_buffer_states_[resource.slot];
-        if (!state_optional) break;
-        const BufferState& state = state_optional.value();
-
-        end_dep_info_.buffer_barriers.push_back({.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2,
-                                                 .pNext = nullptr,
-                                                 .srcStageMask = buffer.state.stage,
-                                                 .srcAccessMask = buffer.state.access,
-                                                 .dstStageMask = state.stage,
-                                                 .dstAccessMask = state.access,
-                                                 .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-                                                 .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-                                                 .buffer = raw_buffers_[resource.raw],
-                                                 .offset = 0,
-                                                 .size = buffer.size});
-        buffer.state = state;
-        break;
-      }
-    }
+    end_dep_info_.image_barriers.push_back(
+        {.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+         .pNext = nullptr,
+         .srcStageMask = image.state.stage,
+         .srcAccessMask = image.state.access,
+         .dstStageMask = state.stage,
+         .dstAccessMask = state.access,
+         .oldLayout = image.state.layout,
+         .newLayout = state.layout,
+         .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+         .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+         .image = context_->raw_images_[resource.raw],
+         .subresourceRange = {
+             .aspectMask = image.aspect, .baseMipLevel = 0, .levelCount = 1, .baseArrayLayer = 0, .layerCount = 1}});
+    image.state = state;
   }
+
+  for (const auto& [id, state]: end_buffer_states_) {
+    const Resource& resource = context_->resources_[*id.id];
+    BufferResource& buffer = context_->buffers_[resource.slot];
+
+    end_dep_info_.buffer_barriers.push_back({.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2,
+                                             .pNext = nullptr,
+                                             .srcStageMask = buffer.state.stage,
+                                             .srcAccessMask = buffer.state.access,
+                                             .dstStageMask = state.stage,
+                                             .dstAccessMask = state.access,
+                                             .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                                             .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                                             .buffer = context_->raw_buffers_[resource.raw],
+                                             .offset = 0,
+                                             .size = buffer.size});
+    buffer.state = state;
+  }
+
   end_dep_info_.dep_info.bufferMemoryBarrierCount = static_cast<uint32_t>(end_dep_info_.buffer_barriers.size());
   end_dep_info_.dep_info.pBufferMemoryBarriers = end_dep_info_.buffer_barriers.data();
   end_dep_info_.dep_info.imageMemoryBarrierCount = static_cast<uint32_t>(end_dep_info_.image_barriers.size());

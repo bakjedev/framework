@@ -1,5 +1,5 @@
 #include "pass_builder.hpp"
-#include "pass_graph.hpp"
+#include "graph.hpp"
 #include "types/pass.hpp"
 
 passgraph::PassBuilder::PassBuilder(Pass* pass, Graph* graph, const size_t id) :
@@ -10,7 +10,7 @@ passgraph::PassBuilder::PassBuilder(Pass* pass, Graph* graph, const size_t id) :
 
 passgraph::PassBuilder& passgraph::PassBuilder::add_color_attachment(const AttachmentInfo& info)
 {
-  auto& res = graph_->resources_.at(*info.resource.id);
+  auto& res = graph_->resource_infos_[info.resource];
   res.write_passes.insert(id_);
 
   ImageAccess& image = pass_->images.emplace_back(
@@ -28,7 +28,7 @@ passgraph::PassBuilder& passgraph::PassBuilder::add_color_attachment(const Attac
 
 passgraph::PassBuilder& passgraph::PassBuilder::add_depth_attachment(const AttachmentInfo& info)
 {
-  auto& res = graph_->resources_.at(*info.resource.id);
+  auto& res = graph_->resource_infos_[info.resource];
   res.write_passes.insert(id_);
 
   ImageAccess& image = pass_->images.emplace_back(
