@@ -6,9 +6,12 @@ namespace passgraph {
     VkAccessFlags2 access;
     VkPipelineStageFlags2 stage;
     VkImageLayout layout;
-    
+
+    static const ImageState Undefined;
+
     bool operator==(const ImageState& other) const = default;
   };
+  constexpr ImageState ImageState::Undefined{VK_ACCESS_2_NONE, VK_PIPELINE_STAGE_2_NONE, VK_IMAGE_LAYOUT_UNDEFINED};
 
   struct ImageResource {
     uint32_t x;

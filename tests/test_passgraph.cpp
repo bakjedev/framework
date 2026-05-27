@@ -5,19 +5,17 @@ TEST(Passgraph, SimpleTest)
 {
   passgraph::Context context;
 
-  const auto buf = context.import_buffer(
-      {.size = 0, .usage = 0u, .state = {.access = VK_ACCESS_2_NONE, .stage = VK_PIPELINE_STAGE_2_NONE}}, nullptr,
-      "Data");
+  const auto buf =
+      context.import_buffer({.size = 0, .usage = 0u, .state = passgraph::BufferState::Undefined}, nullptr, "Data");
 
-  const auto img = context.import_image(
-      {.x = 1920,
-       .y = 1080,
-       .z = 0,
-       .format = VK_FORMAT_R32G32B32A32_SFLOAT,
-       .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
-       .aspect = VK_IMAGE_ASPECT_COLOR_BIT,
-       .state = {.access = VK_ACCESS_2_NONE, .stage = VK_PIPELINE_STAGE_2_NONE, .layout = VK_IMAGE_LAYOUT_UNDEFINED}},
-      nullptr, nullptr, "RenderTarget");
+  const auto img = context.import_image({.x = 1920,
+                                         .y = 1080,
+                                         .z = 0,
+                                         .format = VK_FORMAT_R32G32B32A32_SFLOAT,
+                                         .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+                                         .aspect = VK_IMAGE_ASPECT_COLOR_BIT,
+                                         .state = passgraph::ImageState::Undefined},
+                                        nullptr, nullptr, "RenderTarget");
 
   EXPECT_TRUE(buf);
   EXPECT_TRUE(img);
