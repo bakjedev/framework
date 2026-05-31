@@ -138,6 +138,8 @@ bool passgraph::Graph::compile()
     dep_info.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
     dep_info.dependencyFlags = 0u;
 
+    uint32_t max_width = 0, max_height = 0;
+
     // image memory barriers
     for (const ImageAccess& image_access: pass.images) {
       const ImageState new_state{
@@ -168,7 +170,7 @@ bool passgraph::Graph::compile()
           optional_rendering_info.emplace();
         }
         auto& rendering_info = *optional_rendering_info;
-        const Attachment& attachment = *image_access.attachment;
+        const auto& [load_op, store_op, clear_value, is_depth] = *image_access.attachment;
         VkRenderingAttachmentInfo attachment_info{.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
                                                   .pNext = nullptr,
                                                   .imageView = context_->raw_image_views_[resource.raw],
@@ -176,17 +178,23 @@ bool passgraph::Graph::compile()
                                                   .resolveMode = VK_RESOLVE_MODE_NONE,
                                                   .resolveImageView = nullptr,
                                                   .resolveImageLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-                                                  .loadOp = attachment.load_op,
-                                                  .storeOp = attachment.store_op,
+                                                  .loadOp = load_op,
+                                                  .storeOp = store_op,
                                                   .clearValue = {}};
-        if (attachment.is_depth) {
+        if (is_depth) {
+          attachment_info.clearValue.depthStencil.depth = clear_value.r;
+          attachment_info.clearValue.depthStencil.stencil = static_cast<uint32_t>(clear_value.r);
           rendering_info.depth_info = attachment_info;
         } else {
+          attachment_info.clearValue.color.float32[0] = clear_value.r;
+          attachment_info.clearValue.color.float32[1] = clear_value.g;
+          attachment_info.clearValue.color.float32[2] = clear_value.b;
+          attachment_info.clearValue.color.float32[3] = clear_value.a;
           rendering_info.attachment_infos.push_back(attachment_info);
         }
-        rendering_info.rendering_info.renderArea.extent = {
-            .width = std::max(image.x, rendering_info.rendering_info.renderArea.extent.width),
-            .height = std::max(image.y, rendering_info.rendering_info.renderArea.extent.height)};
+
+        max_width = std::max(max_width, image.x);
+        max_height = std::max(max_height, image.y);
       }
     }
     dep_info.imageMemoryBarrierCount = static_cast<uint32_t>(image_barriers.size());
@@ -194,14 +202,16 @@ bool passgraph::Graph::compile()
 
     // rendering info
     if (optional_rendering_info) {
-      auto& rendering_info = *optional_rendering_info;
-      rendering_info.rendering_info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
-      rendering_info.rendering_info.layerCount = 1;
-      rendering_info.rendering_info.colorAttachmentCount =
-          static_cast<uint32_t>(rendering_info.attachment_infos.size());
-      rendering_info.rendering_info.pColorAttachments = rendering_info.attachment_infos.data();
-      if (rendering_info.depth_info) {
-        rendering_info.rendering_info.pDepthAttachment = &*rendering_info.depth_info;
+      auto& [rendering_info, attachment_infos, depth_info] = *optional_rendering_info;
+      rendering_info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
+      rendering_info.layerCount = 1;
+      rendering_info.renderArea.extent = pass.render_area
+                                             ? VkExtent2D{pass.render_area->width, pass.render_area->height}
+                                             : VkExtent2D{max_width, max_height};
+      rendering_info.colorAttachmentCount = static_cast<uint32_t>(attachment_infos.size());
+      rendering_info.pColorAttachments = attachment_infos.data();
+      if (depth_info) {
+        rendering_info.pDepthAttachment = &*depth_info;
       }
     }
 

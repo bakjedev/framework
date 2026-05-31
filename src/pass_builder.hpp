@@ -13,6 +13,7 @@ namespace passgraph {
     ResourceID resource;
     LoadOp load_op = LoadOp::DontCare;
     StoreOp store_op = StoreOp::DontCare;
+    ClearValue clear_value{};
     std::optional<uint32_t> pass = std::nullopt;
   };
 
@@ -22,6 +23,8 @@ namespace passgraph {
 
     GraphicsPassBuilder& set_color_attachment(const AttachmentInfo& info);
     GraphicsPassBuilder& set_depth_attachment(const AttachmentInfo& info);
+
+    GraphicsPassBuilder& set_render_area(RenderArea area);
 
     GraphicsPassBuilder& execute(std::function<void(VkCommandBuffer)> func);
 

@@ -6,10 +6,23 @@
 #include "resource.hpp"
 
 namespace passgraph {
+  struct ClearValue {
+    float r{};
+    float g{};
+    float b{};
+    float a{};
+  };
+
   struct Attachment {
     VkAttachmentLoadOp load_op = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
     VkAttachmentStoreOp store_op = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    ClearValue clear_value;
     bool is_depth = false;
+  };
+
+  struct RenderArea {
+    uint32_t width{};
+    uint32_t height{};
   };
 
   struct ImageAccess {
@@ -36,5 +49,6 @@ namespace passgraph {
     std::function<void(VkCommandBuffer cmd)> func;
     std::vector<ImageAccess> images;
     std::vector<BufferAccess> buffers;
+    std::optional<RenderArea> render_area;
   };
 } // namespace passgraph

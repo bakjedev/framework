@@ -17,6 +17,7 @@ passgraph::GraphicsPassBuilder& passgraph::GraphicsPassBuilder::set_color_attach
       info.resource, info.pass ? info.pass : res.last_writer,
       Attachment{.load_op = static_cast<VkAttachmentLoadOp>(info.load_op),
                  .store_op = static_cast<VkAttachmentStoreOp>(info.store_op),
+                 .clear_value = info.clear_value,
                  .is_depth = false},
       VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
       VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
@@ -39,6 +40,7 @@ passgraph::GraphicsPassBuilder& passgraph::GraphicsPassBuilder::set_depth_attach
       info.resource, info.pass ? info.pass : res.last_writer,
       Attachment{.load_op = static_cast<VkAttachmentLoadOp>(info.load_op),
                  .store_op = static_cast<VkAttachmentStoreOp>(info.store_op),
+                 .clear_value = info.clear_value,
                  .is_depth = true},
       VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
       VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
@@ -50,6 +52,12 @@ passgraph::GraphicsPassBuilder& passgraph::GraphicsPassBuilder::set_depth_attach
   }
   res.last_writer = id_;
 
+  return *this;
+}
+
+passgraph::GraphicsPassBuilder& passgraph::GraphicsPassBuilder::set_render_area(const RenderArea area)
+{
+  pass_->render_area = area;
   return *this;
 }
 
