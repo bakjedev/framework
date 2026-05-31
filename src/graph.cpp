@@ -1,9 +1,9 @@
 #include "graph.hpp"
 #include <algorithm>
+#include <cassert>
 #include <iostream>
 #include "context.hpp"
 #include "types/pass.hpp"
-
 
 void passgraph::Graph::set_image_end_state(const ResourceID resource, const ImageState& state)
 {
@@ -68,6 +68,23 @@ bool passgraph::Graph::compile()
         current_access = sorted_reads[read_idx];
         current_read = true;
         read_idx++;
+      }
+
+      // explicit read dependencies
+      if (current_read) {
+        auto it = info.read_deps.find(current_access);
+        if (it != info.read_deps.end()) {
+          uint32_t write_access = it->second;
+          assert(info.write_passes.contains(write_access));
+
+          dag[current_access].first.insert(write_access);
+          dag[write_access].second.insert(current_access);
+
+          previous_access = current_access;
+          previous_write = false;
+          previous_read = true;
+          continue;
+        }
       }
 
       // if we've accessed before and that was in a different pass

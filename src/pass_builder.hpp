@@ -9,13 +9,18 @@ namespace passgraph {
   enum class LoadOp { Load = 0, Clear = 1, DontCare = 2 };
   enum class StoreOp { Store = 0, DontCare = 1 };
 
+  struct ResourceAccess {
+    ResourceID id;
+    std::optional<uint32_t> pass = std::nullopt;
+  };
+
   struct AttachmentInfo {
-    ResourceID resource;
+    ResourceAccess resource;
     LoadOp load_op = LoadOp::DontCare;
     StoreOp store_op = StoreOp::DontCare;
     ClearValue clear_value{};
-    std::optional<uint32_t> pass = std::nullopt;
   };
+
 
   template<typename T>
   class PassBuilder {
@@ -32,8 +37,9 @@ namespace passgraph {
     Pass* pass_;
     Graph* graph_;
     uint32_t id_;
+    std::unordered_set<ResourceID> accessed_;
 
-    void set_buffer_input(ResourceID resource, VkAccessFlags2 access, VkPipelineStageFlags2 stage) const;
+    void set_buffer_input(const ResourceAccess& resource, VkAccessFlags2 access, VkPipelineStageFlags2 stage);
   };
 
   class GraphicsPassBuilder : public PassBuilder<GraphicsPassBuilder> {
@@ -43,9 +49,9 @@ namespace passgraph {
     GraphicsPassBuilder& set_color_attachment(const AttachmentInfo& info);
     GraphicsPassBuilder& set_depth_attachment(const AttachmentInfo& info);
 
-    GraphicsPassBuilder& set_vertex_buffer_input(ResourceID resource);
-    GraphicsPassBuilder& set_index_buffer_input(ResourceID resource);
-    GraphicsPassBuilder& set_indirect_buffer_input(ResourceID resource);
+    GraphicsPassBuilder& set_vertex_buffer_input(const ResourceAccess& resource);
+    GraphicsPassBuilder& set_index_buffer_input(const ResourceAccess& resource);
+    GraphicsPassBuilder& set_indirect_buffer_input(const ResourceAccess& resource);
 
     GraphicsPassBuilder& set_render_area(RenderArea area);
   };

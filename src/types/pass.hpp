@@ -27,7 +27,6 @@ namespace passgraph {
 
   struct ImageAccess {
     ResourceID resource;
-    std::optional<uint32_t> pass;
     std::optional<Attachment> attachment;
 
     VkAccessFlags2 access = VK_ACCESS_2_NONE;

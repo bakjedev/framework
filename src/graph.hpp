@@ -47,7 +47,7 @@ namespace passgraph {
     struct ResourceInfo {
       std::unordered_set<uint32_t> write_passes;
       std::unordered_set<uint32_t> read_passes;
-      std::optional<uint32_t> last_writer;
+      std::unordered_map<uint32_t, uint32_t> read_deps;
     };
 
     std::unordered_map<ResourceID, ResourceInfo> resource_infos_;
