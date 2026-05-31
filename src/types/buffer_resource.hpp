@@ -18,4 +18,11 @@ namespace passgraph {
 
     BufferState state;
   };
+
+  template<typename T>
+  concept BufferInterface = requires(T buf) {
+    { buf.size() } -> std::same_as<VkDeviceSize>;
+    { buf.usage() } -> std::same_as<VkBufferUsageFlags>;
+    { buf.buffer() } -> std::same_as<VkBuffer>;
+  };
 } // namespace passgraph
