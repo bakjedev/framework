@@ -99,8 +99,15 @@ T& passgraph::PassBuilder<T>::set_texture_input(const TextureInfo& info)
     res.read_deps[id_] = *info.resource.pass;
   }
 
-  pass_->images.emplace_back(info.resource.id, std::nullopt, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT, info.stage,
+  ImageAccess& image = pass_->images.emplace_back(info.resource.id, std::nullopt, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT, info.stage,
                              VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+  if (image.stage == VK_PIPELINE_STAGE_2_NONE) {
+    if constexpr (std::is_same_v<T, GraphicsPassBuilder>) {
+      image.stage = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
+    }
+  }
+
   return static_cast<T&>(*this);
 }
 
