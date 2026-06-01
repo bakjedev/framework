@@ -44,6 +44,13 @@ namespace passgraph {
       std::optional<VkRenderingAttachmentInfo> depth_info;
     };
 
+    struct CompiledPass {
+      DependencyInfo deps;
+      std::optional<RenderingInfo> render;
+      std::string name;
+      std::function<void(VkCommandBuffer cmd)> func;
+    };
+
     struct ResourceInfo {
       std::unordered_set<uint32_t> write_passes;
       std::unordered_set<uint32_t> read_passes;
@@ -55,8 +62,7 @@ namespace passgraph {
     std::vector<Pass> passes_;
 
     std::vector<uint32_t> sorted_pass_ids_;
-    std::vector<DependencyInfo> pass_dep_infos_;
-    std::vector<std::optional<RenderingInfo>> rendering_infos_;
+    std::vector<CompiledPass> compiled_passes_;
 
     std::unordered_map<ResourceID, ImageState> end_image_states_;
     std::unordered_map<ResourceID, BufferState> end_buffer_states_;

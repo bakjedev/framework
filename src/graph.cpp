@@ -29,8 +29,7 @@ bool passgraph::Graph::compile()
   // -------------------
   sorted_pass_ids_.clear();
   end_dep_info_ = {};
-  pass_dep_infos_.clear();
-  rendering_infos_.clear();
+  compiled_passes_.clear();
 
   // --------------
   // you like DAGs?
@@ -162,15 +161,17 @@ bool passgraph::Graph::compile()
   // ----------------------------------------
   // Create pass barriers and rendering infos
   // ----------------------------------------
-  pass_dep_infos_.resize(passes_.size());
-  rendering_infos_.resize(passes_.size());
+  compiled_passes_.resize(passes_.size());
 
   for (const uint32_t pass_id: sorted_pass_ids_) {
     Pass& pass = passes_[pass_id];
-    auto& [dep_info, image_barriers, buffer_barriers] = pass_dep_infos_[pass_id];
-    auto& optional_rendering_info = rendering_infos_[pass_id];
+    auto& [dependencies, rendering, name, func] = compiled_passes_[pass_id];
+    auto& [dep_info, image_barriers, buffer_barriers] = dependencies;
     dep_info.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
     dep_info.dependencyFlags = 0u;
+
+    name = std::move(pass.name);
+    func = std::move(pass.func);
 
     uint32_t max_width = 0, max_height = 0;
 
@@ -200,10 +201,10 @@ bool passgraph::Graph::compile()
 
       // rendering attachment
       if (image_access.attachment) {
-        if (!optional_rendering_info.has_value()) {
-          optional_rendering_info.emplace();
+        if (!rendering.has_value()) {
+          rendering.emplace();
         }
-        auto& rendering_info = *optional_rendering_info;
+        auto& rendering_info = *rendering;
         const auto& [load_op, store_op, clear_value, is_depth] = *image_access.attachment;
         VkRenderingAttachmentInfo attachment_info{.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
                                                   .pNext = nullptr,
@@ -235,8 +236,8 @@ bool passgraph::Graph::compile()
     dep_info.pImageMemoryBarriers = image_barriers.data();
 
     // rendering info
-    if (optional_rendering_info) {
-      auto& [rendering_info, attachment_infos, depth_info] = *optional_rendering_info;
+    if (rendering) {
+      auto& [rendering_info, attachment_infos, depth_info] = *rendering;
       rendering_info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
       rendering_info.layerCount = 1;
       rendering_info.renderArea.extent = pass.render_area
@@ -327,13 +328,11 @@ void passgraph::Graph::execute(VkCommandBuffer cmd)
 {
   if (!cmd) return;
   for (const uint32_t pass_id: sorted_pass_ids_) {
-    auto& pass = passes_[pass_id];
-    const auto& dep_info = pass_dep_infos_[pass_id];
-    const auto& optional_rendering_info = rendering_infos_[pass_id];
-    vkCmdPipelineBarrier2(cmd, &dep_info.dep_info);
-    if (optional_rendering_info) vkCmdBeginRendering(cmd, &optional_rendering_info->rendering_info);
-    pass.func(cmd);
-    if (optional_rendering_info) vkCmdEndRendering(cmd);
+    auto& compiled_pass = compiled_passes_[pass_id];
+    vkCmdPipelineBarrier2(cmd, &compiled_pass.deps.dep_info);
+    if (compiled_pass.render) vkCmdBeginRendering(cmd, &compiled_pass.render->rendering_info);
+    compiled_pass.func(cmd);
+    if (compiled_pass.render) vkCmdEndRendering(cmd);
   }
   vkCmdPipelineBarrier2(cmd, &end_dep_info_.dep_info);
 
