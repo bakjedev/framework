@@ -205,13 +205,13 @@ bool passgraph::Graph::compile()
           rendering.emplace();
         }
         auto& rendering_info = *rendering;
-        const auto& [load_op, store_op, clear_value, is_depth] = *image_access.attachment;
+        const auto& [load_op, store_op, clear_value, is_depth, resolve, resolve_mode] = *image_access.attachment;
         VkRenderingAttachmentInfo attachment_info{.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
                                                   .pNext = nullptr,
                                                   .imageView = context_->raw_image_views_[resource.raw],
                                                   .imageLayout = image.state.layout,
                                                   .resolveMode = VK_RESOLVE_MODE_NONE,
-                                                  .resolveImageView = nullptr,
+                                                  .resolveImageView = VK_NULL_HANDLE,
                                                   .resolveImageLayout = VK_IMAGE_LAYOUT_UNDEFINED,
                                                   .loadOp = load_op,
                                                   .storeOp = store_op,
@@ -226,6 +226,14 @@ bool passgraph::Graph::compile()
           attachment_info.clearValue.color.float32[2] = clear_value.b;
           attachment_info.clearValue.color.float32[3] = clear_value.a;
           rendering_info.attachment_infos.push_back(attachment_info);
+        }
+
+        if (resolve) {
+          const Resource& resolve_resource = context_->resources_.at(*resolve->id);
+          attachment_info.resolveImageView = context_->raw_image_views_[resolve_resource.raw];
+          attachment_info.resolveMode = static_cast<VkResolveModeFlagBits>(resolve_mode);
+          attachment_info.resolveImageLayout =
+              is_depth ? VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL : VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
         }
 
         max_width = std::max(max_width, image.x);

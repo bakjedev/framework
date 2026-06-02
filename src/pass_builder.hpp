@@ -60,6 +60,8 @@ namespace passgraph {
 
     GraphicsPassBuilder& set_color_attachment(const AttachmentInfo& info);
     GraphicsPassBuilder& set_depth_attachment(const AttachmentInfo& info);
+    GraphicsPassBuilder& set_resolve_attachment(ResourceID resolve_resource, ResourceID color_resource,
+                                                VkResolveModeFlags mode);
 
     GraphicsPassBuilder& set_vertex_buffer_input(const ResourceAccess& resource);
     GraphicsPassBuilder& set_index_buffer_input(const ResourceAccess& resource);

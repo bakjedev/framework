@@ -61,6 +61,26 @@ passgraph::GraphicsPassBuilder& passgraph::GraphicsPassBuilder::set_depth_attach
   return *this;
 }
 
+passgraph::GraphicsPassBuilder& passgraph::GraphicsPassBuilder::set_resolve_attachment(
+    const ResourceID resolve_resource, const ResourceID color_resource, const VkResolveModeFlags mode)
+{
+  if (!try_access(resolve_resource)) return *this;
+  auto& res = graph_->resource_deps_[resolve_resource];
+  for (auto& image_access: pass_->images) {
+    if (image_access.resource == color_resource) {
+      if (image_access.attachment.has_value()) {
+        image_access.attachment->resolve = resolve_resource;
+        image_access.attachment->resolve_mode = mode;
+
+        res.write_passes.insert(id_);
+
+        break;
+      }
+    }
+  }
+  return *this;
+}
+
 passgraph::GraphicsPassBuilder& passgraph::GraphicsPassBuilder::set_vertex_buffer_input(const ResourceAccess& resource)
 {
   set_buffer_read(resource, VK_ACCESS_2_VERTEX_ATTRIBUTE_READ_BIT, VK_PIPELINE_STAGE_2_VERTEX_INPUT_BIT);

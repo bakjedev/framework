@@ -18,6 +18,8 @@ namespace passgraph {
     VkAttachmentStoreOp store_op = VK_ATTACHMENT_STORE_OP_DONT_CARE;
     ClearValue clear_value;
     bool is_depth = false;
+    std::optional<ResourceID> resolve = std::nullopt;
+    VkResolveModeFlags resolve_mode = VK_RESOLVE_MODE_NONE;
   };
 
   struct RenderArea {
@@ -27,7 +29,7 @@ namespace passgraph {
 
   struct ImageAccess {
     ResourceID resource;
-    std::optional<Attachment> attachment;
+    std::optional<Attachment> attachment = std::nullopt;
 
     VkAccessFlags2 access = VK_ACCESS_2_NONE;
     VkPipelineStageFlags2 stages = VK_PIPELINE_STAGE_2_NONE;
