@@ -356,7 +356,7 @@ int main()
       swap_chain_imports[i] = context.import_image(
           {.x = window_width,
            .y = window_height,
-           .z = 0,
+           .z = 1,
            .format = image_format,
            .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
            .aspect = VK_IMAGE_ASPECT_COLOR_BIT,

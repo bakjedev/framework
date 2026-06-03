@@ -1,6 +1,7 @@
 #include "graph.hpp"
 #include <algorithm>
 #include <cassert>
+#include <deque>
 #include <iostream>
 #include "context.hpp"
 #include "types/pass.hpp"
@@ -31,137 +32,129 @@ bool fwrk::Graph::compile()
   end_dep_info_ = {};
   compiled_passes_.clear();
 
+  size_t pass_count = passes_.size();
+
   // --------------
   // you like DAGs?
   // --------------
-  std::vector<std::pair<std::unordered_set<uint32_t>, std::unordered_set<uint32_t>>> dag{passes_.size()};
-  // first = incoming, second = outgoing
+  std::vector<std::vector<uint32_t>> incoming{pass_count};
+  std::vector<std::vector<uint32_t>> outcoming{pass_count};
 
-  for (const auto& [_, info]: resource_deps_) {
-    std::vector<uint32_t> sorted_writes{info.write_passes.begin(), info.write_passes.end()};
-    std::ranges::sort(sorted_writes);
-    const auto write_count = static_cast<uint32_t>(sorted_writes.size());
+  for (auto& [_, info]: resource_deps_) {
+    std::ranges::sort(info.write_passes);
+    std::ranges::sort(info.read_passes);
+    const auto write_count = static_cast<uint32_t>(info.write_passes.size());
+    const auto read_count = static_cast<uint32_t>(info.read_passes.size());
 
-    std::vector<uint32_t> sorted_reads{info.read_passes.begin(), info.read_passes.end()};
-    std::ranges::sort(sorted_reads);
-    const auto read_count = static_cast<uint32_t>(sorted_reads.size());
-
-    std::optional<uint32_t> previous_access;
-    bool previous_write = false;
-    bool previous_read = false;
+    std::optional<uint32_t> previous_write;
+    std::vector<uint32_t> previous_readers;
 
     uint32_t write_idx = 0;
     uint32_t read_idx = 0;
+    // if we still have a write and a read and they happen in the same pass
     while (write_idx < write_count || read_idx < read_count) {
-      uint32_t current_access;
-      bool current_write = false;
-      bool current_read = false;
-
-      // if we still have a write and a read and they happen in the same pass
-      if (write_idx < write_count && read_idx < read_count && sorted_writes[write_idx] == sorted_reads[read_idx]) {
-        current_access = sorted_writes[write_idx];
-        current_write = true;
-        current_read = true;
+      if (write_idx < write_count && read_idx < read_count &&
+          info.write_passes[write_idx] == info.read_passes[read_idx]) {
+        uint32_t write_pass = info.write_passes[write_idx];
+        if (previous_write) {
+          incoming[*previous_write].push_back(write_pass);
+          outcoming[write_pass].push_back(*previous_write);
+        }
+        for (uint32_t read: previous_readers) {
+          incoming[read].push_back(write_pass);
+          outcoming[write_pass].push_back(read);
+        }
+        previous_write = write_pass;
+        previous_readers.clear();
         write_idx++;
         read_idx++;
         // if we still have a write and either we have no more reads or the write comes earlier than the read
       } else if (write_idx < write_count &&
-                 (read_idx >= read_count || sorted_writes[write_idx] < sorted_reads[read_idx])) {
-        current_access = sorted_writes[write_idx];
-        current_write = true;
+                 (read_idx >= read_count || info.write_passes[write_idx] < info.read_passes[read_idx])) {
+        uint32_t write_pass = info.write_passes[write_idx];
+        if (previous_write) {
+          incoming[*previous_write].push_back(write_pass);
+          outcoming[write_pass].push_back(*previous_write);
+        }
+        for (uint32_t read: previous_readers) {
+          incoming[read].push_back(write_pass);
+          outcoming[write_pass].push_back(read);
+        }
+        previous_write = write_pass;
+        previous_readers.clear();
         write_idx++;
         // if we still have a read but no more writes
       } else {
-        current_access = sorted_reads[read_idx];
-        current_read = true;
+        uint32_t read_pass = info.read_passes[read_idx];
+
+        auto it = info.read_deps.find(read_pass);
+        if (it != info.read_deps.end()) {
+          uint32_t other = it->second;
+          incoming[other].push_back(read_pass);
+          outcoming[read_pass].push_back(other);
+        } else if (previous_write) {
+          incoming[*previous_write].push_back(read_pass);
+          outcoming[read_pass].push_back(*previous_write);
+        }
+
+        previous_readers.push_back(read_pass);
         read_idx++;
       }
-
-      // explicit read dependencies
-      if (current_read) {
-        auto it = info.read_deps.find(current_access);
-        if (it != info.read_deps.end()) {
-          uint32_t write_access = it->second;
-          assert(info.write_passes.contains(write_access));
-
-          // add edge from the explicit write pass to this pass
-          dag[current_access].first.insert(write_access);
-          dag[write_access].second.insert(current_access);
-
-          // add edges from this pass to all other write passes of this resource
-          for (const uint32_t other_write: info.write_passes) {
-            if (other_write != write_access && other_write != current_access) {
-              dag[other_write].first.insert(current_access);
-              dag[current_access].second.insert(other_write);
-            }
-          }
-
-          previous_access = current_access;
-          previous_write = false;
-          previous_read = true;
-          continue;
-        }
-      }
-
-      // if we've accessed before and that was in a different pass
-      if (previous_access.has_value() && *previous_access != current_access) {
-        const bool raw = previous_write && current_read;
-        const bool waw = previous_write && current_write;
-        const bool war = previous_read && current_write;
-        [[maybe_unused]] const bool rar = previous_read && current_read; // don't care
-
-        if (raw || waw || war) {
-          dag[current_access].first.insert(*previous_access);
-          dag[*previous_access].second.insert(current_access);
-        }
-      }
-
-      previous_access = current_access;
-      previous_write = current_write;
-      previous_read = current_read;
     }
+  }
+  for (auto& in: incoming) {
+    std::ranges::sort(in);
+    auto [first, last] = std::ranges::unique(in);
+    in.erase(first, last);
+  }
+  for (auto& out: outcoming) {
+    std::ranges::sort(out);
+    auto [first, last] = std::ranges::unique(out);
+    out.erase(first, last);
   }
 
   // ----------------
   // Topological sort
   // ----------------
   {
-    std::vector<uint32_t> sorted_passes;
-    std::unordered_set<uint32_t> root_nodes;
+    sorted_pass_ids_.reserve(pass_count);
+
+    std::vector<uint32_t> in_deg(pass_count);
+    for (uint32_t i = 0; i < pass_count; i++) {
+      in_deg[i] = static_cast<uint32_t>(incoming[i].size());
+    }
 
     // find all nodes with no incoming edges
-    for (uint32_t i = 0; i < dag.size(); i++) {
-      if (dag[i].first.empty()) {
-        root_nodes.insert(i);
+    std::deque<uint32_t> root_nodes;
+    for (uint32_t i = 0; i < incoming.size(); i++) {
+      if (incoming[i].empty()) {
+        root_nodes.push_back(i);
       }
     }
 
     // sort
     while (!root_nodes.empty()) {
-      auto node = root_nodes.extract(root_nodes.begin()).value();
-      sorted_passes.push_back(node);
+      auto node = root_nodes.front();
+      root_nodes.pop_front();
+      sorted_pass_ids_.push_back(node);
 
-      auto& node_out = dag[node].second;
-      for (auto out_it = node_out.begin(); out_it != node_out.end();) {
-        // remove edge
-        auto out_node = *out_it;
-        auto& out_node_ins = dag[out_node].first;
-        out_node_ins.erase(out_node_ins.find(node)); // unsafe
-        out_it = node_out.erase(out_it);
+      for (auto it: outcoming[node]) {
+        in_deg[it]--;
 
         // recurse
-        if (out_node_ins.empty()) {
-          root_nodes.insert(out_node);
+        if (in_deg[it] == 0) {
+          root_nodes.push_back(it);
         }
       }
     }
-    sorted_pass_ids_ = std::move(sorted_passes);
   }
+
+  assert(sorted_pass_ids_.size() == passes_.size());
 
   // ----------------------------------------
   // Create pass barriers and rendering infos
   // ----------------------------------------
-  compiled_passes_.resize(passes_.size());
+  compiled_passes_.resize(pass_count);
 
   for (const uint32_t pass_id: sorted_pass_ids_) {
     Pass& pass = passes_[pass_id];

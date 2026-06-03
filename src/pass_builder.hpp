@@ -72,6 +72,7 @@ namespace fwrk {
     void set_possible_read(const ResourceAccess& resource, ResourceDependencies& deps, VkAccessFlags2& access,
                            VkAccessFlags2 access_flags) const;
     bool try_access(ResourceID resource);
+    void set_possible_explicit_read(std::optional<uint32_t> pass, ResourceDependencies& deps) const;
   };
 
   class GraphicsPassBuilder : public PassBuilder<GraphicsPassBuilder> {

@@ -20,15 +20,13 @@ fwrk::GraphicsPassBuilder& fwrk::GraphicsPassBuilder::set_color_attachment(const
       VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
   if (info.load_op == LoadOp::Load && !res.write_passes.empty()) {
-    const auto [_, inserted] = res.read_passes.insert(id_);
-    assert(inserted);
-    if (info.resource.pass) {
-      res.read_deps[id_] = *info.resource.pass;
-    }
+    res.read_passes.push_back(id_);
+    set_possible_explicit_read(info.resource.pass, res);
+
     image.access |= VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT;
   }
 
-  res.write_passes.insert(id_);
+  res.write_passes.push_back(id_);
   return *this;
 }
 
@@ -48,16 +46,13 @@ fwrk::GraphicsPassBuilder& fwrk::GraphicsPassBuilder::set_depth_attachment(const
       VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
 
   if (info.load_op == LoadOp::Load && !res.write_passes.empty()) {
-    const auto [_, inserted] = res.read_passes.insert(id_);
-    assert(inserted);
-    if (info.resource.pass) {
-      res.read_deps[id_] = *info.resource.pass;
-    }
+    res.read_passes.push_back(id_);
+    set_possible_explicit_read(info.resource.pass, res);
 
     image.access |= VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
   }
 
-  res.write_passes.insert(id_);
+  res.write_passes.push_back(id_);
   return *this;
 }
 
@@ -71,7 +66,7 @@ fwrk::GraphicsPassBuilder& fwrk::GraphicsPassBuilder::set_resolve_attachment(con
         image_access.attachment->resolve = info.resource;
         image_access.attachment->resolve_mode = info.mode;
 
-        res.write_passes.insert(id_);
+        res.write_passes.push_back(id_);
 
         break;
       }
@@ -109,10 +104,8 @@ T& fwrk::PassBuilder<T>::set_image_read(const ImageInfo& info)
 {
   if (!try_access(info.resource.id)) return static_cast<T&>(*this);
   auto& res = graph_->resource_deps_[info.resource.id];
-  res.read_passes.insert(id_);
-  if (info.resource.pass) {
-    res.read_deps[id_] = *info.resource.pass;
-  }
+  res.read_passes.push_back(id_);
+  set_possible_explicit_read(info.resource.pass, res);
 
   ImageAccess& image = pass_->images.emplace_back(info.resource.id, std::nullopt, info.layer, info.level,
                                                   VK_ACCESS_2_SHADER_SAMPLED_READ_BIT, info.stages,
@@ -150,7 +143,7 @@ T& fwrk::PassBuilder<T>::set_storage_buffer_write(const BufferInfo& info)
 
   set_possible_read(info.resource, res, buffer.access, VK_ACCESS_2_SHADER_STORAGE_READ_BIT);
 
-  res.write_passes.insert(id_);
+  res.write_passes.push_back(id_);
   return static_cast<T&>(*this);
 }
 
@@ -159,10 +152,8 @@ T& fwrk::PassBuilder<T>::set_storage_image_read(const ImageInfo& info)
 {
   if (!try_access(info.resource.id)) return static_cast<T&>(*this);
   auto& res = graph_->resource_deps_[info.resource.id];
-  res.read_passes.insert(id_);
-  if (info.resource.pass) {
-    res.read_deps[id_] = *info.resource.pass;
-  }
+  res.read_passes.push_back(id_);
+  set_possible_explicit_read(info.resource.pass, res);
 
   ImageAccess& image =
       pass_->images.emplace_back(info.resource.id, std::nullopt, info.layer, info.level,
@@ -187,7 +178,7 @@ T& fwrk::PassBuilder<T>::set_storage_image_write(const ImageInfo& info)
 
   set_possible_read(info.resource, res, image.access, VK_ACCESS_2_SHADER_STORAGE_READ_BIT);
 
-  res.write_passes.insert(id_);
+  res.write_passes.push_back(id_);
   return static_cast<T&>(*this);
 }
 
@@ -204,10 +195,9 @@ void fwrk::PassBuilder<T>::set_buffer_read(const BufferInfo& info, const VkAcces
   if (accessed_.contains(info.resource.id)) return;
   accessed_.insert(info.resource.id);
   auto& res = graph_->resource_deps_[info.resource.id];
-  res.read_passes.insert(id_);
-  if (info.resource.pass) {
-    res.read_deps[id_] = *info.resource.pass;
-  }
+  res.read_passes.push_back(id_);
+  set_possible_explicit_read(info.resource.pass, res);
+
 
   BufferAccess& buffer = pass_->buffers.emplace_back(info.resource.id, info.size, info.offset, access, info.stages);
 
@@ -226,13 +216,11 @@ void fwrk::PassBuilder<T>::set_stages_fallback(VkPipelineStageFlags2& stages) co
 
 template<typename T>
 void fwrk::PassBuilder<T>::set_possible_read(const ResourceAccess& resource, ResourceDependencies& deps,
-                                                  VkAccessFlags2& access, const VkAccessFlags2 access_flags) const
+                                             VkAccessFlags2& access, const VkAccessFlags2 access_flags) const
 {
   if (!deps.write_passes.empty()) {
-    deps.read_passes.insert(id_);
-    if (resource.pass) {
-      deps.read_deps[id_] = *resource.pass;
-    }
+    deps.read_passes.push_back(id_);
+    set_possible_explicit_read(resource.pass, deps);
     access |= access_flags;
   }
 }
@@ -243,6 +231,15 @@ bool fwrk::PassBuilder<T>::try_access(const ResourceID resource)
   if (accessed_.contains(resource)) return false;
   accessed_.insert(resource);
   return true;
+}
+
+template<typename T>
+void fwrk::PassBuilder<T>::set_possible_explicit_read(std::optional<uint32_t> pass, ResourceDependencies& deps) const
+{
+  if (pass) {
+    assert(*pass < id_);
+    deps.read_deps[id_] = *pass;
+  }
 }
 
 template class fwrk::PassBuilder<fwrk::GraphicsPassBuilder>;
