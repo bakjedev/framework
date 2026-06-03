@@ -40,6 +40,11 @@ bool fwrk::Graph::compile()
   std::vector<std::vector<uint32_t>> incoming{pass_count};
   std::vector<std::vector<uint32_t>> outcoming{pass_count};
 
+  auto add_edge = [&incoming, &outcoming](const uint32_t from, const uint32_t to) {
+    outcoming[from].push_back(to);
+    incoming[to].push_back(from);
+  };
+
   for (auto& [_, info]: resource_deps_) {
     std::ranges::sort(info.write_passes);
     std::ranges::sort(info.read_passes);
@@ -51,18 +56,16 @@ bool fwrk::Graph::compile()
 
     uint32_t write_idx = 0;
     uint32_t read_idx = 0;
-    // if we still have a write and a read and they happen in the same pass
     while (write_idx < write_count || read_idx < read_count) {
+      // if we still have a write and a read and they happen in the same pass
       if (write_idx < write_count && read_idx < read_count &&
           info.write_passes[write_idx] == info.read_passes[read_idx]) {
         uint32_t write_pass = info.write_passes[write_idx];
         if (previous_write) {
-          incoming[*previous_write].push_back(write_pass);
-          outcoming[write_pass].push_back(*previous_write);
+          add_edge(*previous_write, write_pass);
         }
         for (uint32_t read: previous_readers) {
-          incoming[read].push_back(write_pass);
-          outcoming[write_pass].push_back(read);
+          add_edge(read, write_pass);
         }
         previous_write = write_pass;
         previous_readers.clear();
@@ -73,12 +76,10 @@ bool fwrk::Graph::compile()
                  (read_idx >= read_count || info.write_passes[write_idx] < info.read_passes[read_idx])) {
         uint32_t write_pass = info.write_passes[write_idx];
         if (previous_write) {
-          incoming[*previous_write].push_back(write_pass);
-          outcoming[write_pass].push_back(*previous_write);
+          add_edge(*previous_write, write_pass);
         }
         for (uint32_t read: previous_readers) {
-          incoming[read].push_back(write_pass);
-          outcoming[write_pass].push_back(read);
+          add_edge(read, write_pass);
         }
         previous_write = write_pass;
         previous_readers.clear();
@@ -90,11 +91,16 @@ bool fwrk::Graph::compile()
         auto it = info.read_deps.find(read_pass);
         if (it != info.read_deps.end()) {
           uint32_t other = it->second;
-          incoming[other].push_back(read_pass);
-          outcoming[read_pass].push_back(other);
+          assert(std::ranges::binary_search(info.write_passes, other));
+          add_edge(other, read_pass);
+          for (uint32_t write: info.write_passes) {
+            if (write > other && write < read_pass) { // loop over all other writers between this read and the explicit
+                                                      // dep write and add a reverse edge
+              add_edge(read_pass, write);
+            }
+          }
         } else if (previous_write) {
-          incoming[*previous_write].push_back(read_pass);
-          outcoming[read_pass].push_back(*previous_write);
+          add_edge(*previous_write, read_pass);
         }
 
         previous_readers.push_back(read_pass);
@@ -149,7 +155,7 @@ bool fwrk::Graph::compile()
     }
   }
 
-  assert(sorted_pass_ids_.size() == passes_.size());
+  assert(sorted_pass_ids_.size() == passes_.size() && "You created a cycle");
 
   // ----------------------------------------
   // Create pass barriers and rendering infos

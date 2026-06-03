@@ -234,10 +234,11 @@ bool fwrk::PassBuilder<T>::try_access(const ResourceID resource)
 }
 
 template<typename T>
-void fwrk::PassBuilder<T>::set_possible_explicit_read(std::optional<uint32_t> pass, ResourceDependencies& deps) const
+void fwrk::PassBuilder<T>::set_possible_explicit_read(const std::optional<uint32_t> pass,
+                                                      ResourceDependencies& deps) const
 {
   if (pass) {
-    assert(*pass < id_);
+    assert(*pass < id_ && "Invalid pass id for explicit read dep");
     deps.read_deps[id_] = *pass;
   }
 }
