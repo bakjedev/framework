@@ -1,5 +1,6 @@
 #pragma once
 #include <functional>
+#include <unordered_set>
 #include "types/pass.hpp"
 #include "types/resource.hpp"
 

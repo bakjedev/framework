@@ -52,15 +52,15 @@ namespace fwrk {
       std::function<void(VkCommandBuffer cmd)> func;
     };
 
-    std::unordered_map<ResourceID, ResourceDependencies> resource_deps_;
+    flat_hash_map<ResourceID, ResourceDependencies> resource_deps_;
 
     std::vector<Pass> passes_;
 
     std::vector<uint32_t> sorted_pass_ids_;
     std::vector<CompiledPass> compiled_passes_;
 
-    std::unordered_map<ResourceID, ImageState> end_image_states_;
-    std::unordered_map<ResourceID, BufferState> end_buffer_states_;
+    flat_hash_map<ResourceID, ImageState> end_image_states_;
+    flat_hash_map<ResourceID, BufferState> end_buffer_states_;
     DependencyInfo end_dep_info_;
 
     Context* context_;

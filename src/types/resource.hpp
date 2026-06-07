@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
-#include <unordered_set>
+#include "util/flat_hash_map.hpp"
 
 namespace fwrk {
   enum class ResourceType : uint8_t {
@@ -37,7 +37,7 @@ namespace fwrk {
   struct ResourceDependencies {
     std::vector<uint32_t> write_passes;
     std::vector<uint32_t> read_passes;
-    std::unordered_map<uint32_t, uint32_t> read_deps;
+    flat_hash_map<uint32_t, uint32_t> read_deps;
   };
 } // namespace fwrk
 

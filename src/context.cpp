@@ -72,7 +72,7 @@ VkImageView fwrk::Context::get_image_view(const ImageAccess& image_access, const
   if (it != image_views_cache_.end()) {
     return it->second;
   }
-  
+
   const VkImageViewCreateInfo view_create_info{
       .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
       .pNext = nullptr,
@@ -91,11 +91,11 @@ VkImageView fwrk::Context::get_image_view(const ImageAccess& image_access, const
           },
   };
 
-  VkImageView& view = image_views_cache_[key];
+  VkImageView view = VK_NULL_HANDLE;
   if (vkCreateImageView(device_, &view_create_info, nullptr, &view) != VK_SUCCESS) {
-    image_views_cache_.erase(key);
     return VK_NULL_HANDLE;
   }
+  image_views_cache_[key] = view;
 
   return view;
 }

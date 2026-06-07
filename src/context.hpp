@@ -5,6 +5,7 @@
 
 #include "graph.hpp"
 #include "types/resource.hpp"
+#include "util/flat_hash_map.hpp"
 
 namespace fwrk {
   template<class T>
@@ -52,7 +53,7 @@ namespace fwrk {
     struct ViewKeyHasher {
       size_t operator()(const ViewKey& key) const;
     };
-    std::unordered_map<ViewKey, VkImageView, ViewKeyHasher> image_views_cache_;
+    flat_hash_map<ViewKey, VkImageView, ViewKeyHasher> image_views_cache_;
 
     VkImageView get_image_view(const ImageAccess& image_access, const Resource& resource);
   };
