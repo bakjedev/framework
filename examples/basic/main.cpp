@@ -215,17 +215,7 @@ int main()
   swap_chain_images.resize(image_count);
   VK_CHECK(vkGetSwapchainImagesKHR(device, swap_chain, &image_count, swap_chain_images.data()));
 
-  std::vector depth_formats{VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D24_UNORM_S8_UINT};
-  VkFormat depth_format{VK_FORMAT_UNDEFINED};
-  for (VkFormat& format: depth_formats) {
-    VkFormatProperties2 format_properties{
-        .sType = VK_STRUCTURE_TYPE_FORMAT_PROPERTIES_2, .pNext = nullptr, .formatProperties = {}};
-    vkGetPhysicalDeviceFormatProperties2(physical_device, format, &format_properties);
-    if (format_properties.formatProperties.optimalTilingFeatures & VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT) {
-      depth_format = format;
-      break;
-    }
-  }
+  constexpr VkFormat depth_format = VK_FORMAT_D32_SFLOAT;
 
   VkImageCreateInfo depth_image_create_info{
       .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
@@ -422,15 +412,15 @@ int main()
       vmaDestroyImage(allocator, depth_image, depth_image_allocation);
       VK_CHECK(vmaCreateImage(allocator, &depth_image_create_info, &alloc_create_info, &depth_image,
                               &depth_image_allocation, nullptr));
-      const fwrk::ImageResource depth_image_res{.x = window_width,
-                                                .y = window_height,
-                                                .z = 1,
-                                                .format = depth_format,
-                                                .usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-                                                .aspect = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT,
-                                                .layer_count = 1,
-                                                .level_count = 1,
-                                                .state = fwrk::ImageState::Undefined};
+      constexpr fwrk::ImageResource depth_image_res{.x = window_width,
+                                                    .y = window_height,
+                                                    .z = 1,
+                                                    .format = depth_format,
+                                                    .usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+                                                    .aspect = VK_IMAGE_ASPECT_DEPTH_BIT,
+                                                    .layer_count = 1,
+                                                    .level_count = 1,
+                                                    .state = fwrk::ImageState::Undefined};
       if (depth_import) {
         context.update_image(depth_import, depth_image_res, depth_image);
       } else {
@@ -456,7 +446,7 @@ int main()
                                          .z = 1,
                                          .format = depth_format,
                                          .usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-                                         .aspect = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT,
+                                         .aspect = VK_IMAGE_ASPECT_DEPTH_BIT,
                                          .layer_count = 1,
                                          .level_count = 1,
                                          .state = fwrk::ImageState::Undefined},
