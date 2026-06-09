@@ -1,4 +1,7 @@
-# WIP, not done and unready.
+# framework
+A Vulkan render graph which leaves it up to you how you use it.
+
+### Still quite WIP
 
 ## Prerequisites
 
