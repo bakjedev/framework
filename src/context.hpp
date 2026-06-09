@@ -57,6 +57,9 @@ namespace fwrk {
     template<BufferInterface I>
     void update_buffer(ResourceID resource, const I& buffer, const BufferState& state);
 
+    [[nodiscard]] ResourceID create_alias(ResourceID resource = {}, std::string name = "Unnamed alias");
+    void update_alias(ResourceID alias, ResourceID resource);
+
     [[nodiscard]] Graph& graph() { return graph_; }
 
 

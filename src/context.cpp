@@ -70,6 +70,22 @@ void fwrk::Context::update_buffer(const ResourceID resource, const BufferResourc
   raw_buffers_[res.raw] = raw;
 }
 
+fwrk::ResourceID fwrk::Context::create_alias(const ResourceID resource, std::string name)
+{
+  if (!resource.id) return {};
+
+  const auto id = resources_.size();
+  resources_.emplace_back(ResourceType::Alias, *resource.id, std::move(name));
+
+  return ResourceID{id};
+}
+
+void fwrk::Context::update_alias(const ResourceID alias, const ResourceID resource)
+{
+  if (!alias.id || !resource.id) return;
+  resources_[*alias.id].target = *resource.id;
+}
+
 VkImageView fwrk::Context::get_image_view(const VkImageSubresourceRange& subresource, const VkImageViewType view_type,
                                           const Resource& resource)
 {

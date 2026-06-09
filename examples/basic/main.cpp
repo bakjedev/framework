@@ -30,6 +30,7 @@ int main()
 
     std::vector<fwrk::ResourceID> swapchain_imports(swapchain.images.size());
     fwrk::ResourceID depth_import{};
+    fwrk::ResourceID swapchain_alias{};
 
     auto import_resources = [&] {
       const fwrk::ImageResource color_img_desc{.type = VK_IMAGE_TYPE_2D,
@@ -41,10 +42,14 @@ int main()
       swapchain_imports.resize(swapchain.images.size());
       for (uint32_t i = 0; i < swapchain.images.size(); i++) {
         fwrk::ResourceID& res = swapchain_imports[i];
-        if (res)
+        if (res) {
           context.update_image(res, color_img_desc, swapchain.images[i]);
-        else
+        } else {
           res = context.import_image(color_img_desc, swapchain.images[i], "Swapchain image");
+        }
+        if (!swapchain_alias) {
+          swapchain_alias = context.create_alias(swapchain_imports[0]);
+        }
       }
 
       const fwrk::ImageResource depth_img_desc{.type = VK_IMAGE_TYPE_2D,
@@ -107,7 +112,7 @@ int main()
       fwrk::Graph& graph = context.graph();
 
       graph.add_graphics_pass("RenderPass")
-          .set_color_attachment({.resource = {swapchain_imports[image_index]},
+          .set_color_attachment({.resource = {swapchain_alias},
                                  .load_op = fwrk::LoadOp::Clear,
                                  .store_op = fwrk::StoreOp::Store,
                                  .clear_value = {1.0F, 1.0F, 1.0F, 1.0F}})
@@ -132,7 +137,14 @@ int main()
           swapchain_imports[image_index],
           {.access = VK_ACCESS_2_NONE, .stages = VK_PIPELINE_STAGE_2_NONE, .layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR});
 
-      graph.compile();
+      static bool compiled = false;
+      if (!compiled) {
+        graph.compile();
+        compiled = true;
+      }
+
+      context.update_alias(swapchain_alias, swapchain_imports[image_index]);
+
       graph.execute(cmd);
 
       // --------------------------------

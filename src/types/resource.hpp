@@ -31,6 +31,11 @@ namespace fwrk {
         target(UINT32_MAX)
     {
     }
+
+    Resource(const ResourceType type_, const uint32_t target_, std::string name_) :
+        type(type_), slot(UINT32_MAX), raw(UINT32_MAX), name(std::move(name_)), target(target_)
+    {
+    }
   };
 
   struct ResourceDependencies {
