@@ -76,6 +76,10 @@ namespace fwrk {
     T& set_storage_buffer_write(const BufferInfo& info);
     T& set_storage_image_read(const StorageImageInfo& info);
     T& set_storage_image_write(const StorageImageInfo& info);
+    T& set_image_transfer_src(const ImageInfo& info);
+    T& set_image_transfer_dst(const ImageInfo& info);
+    T& set_buffer_transfer_src(const BufferInfo& info);
+    T& set_buffer_transfer_dst(const BufferInfo& info);
 
     T& set_execute(std::function<void(VkCommandBuffer)> func);
     [[nodiscard]] uint32_t id() const { return id_; }

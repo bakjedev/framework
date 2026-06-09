@@ -214,6 +214,80 @@ T& fwrk::PassBuilder<T>::set_storage_image_write(const StorageImageInfo& info)
 }
 
 template<typename T>
+T& fwrk::PassBuilder<T>::set_image_transfer_src(const ImageInfo& info)
+{
+  if (!try_access(info.resource.id)) return static_cast<T&>(*this);
+  auto& res = graph_->resource_deps_[info.resource.id];
+
+  res.read_passes.push_back(id_);
+  set_possible_explicit_read(info.resource.pass, res);
+
+  ImageAccess& image = pass_->images.emplace_back(
+      info.resource.id, std::nullopt, info.aspect, info.base_level, info.level_count, info.base_layer, info.layer_count,
+      info.view_type, VK_ACCESS_2_TRANSFER_READ_BIT, info.stages, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+
+  if (image.stages == VK_PIPELINE_STAGE_2_NONE) {
+    image.stages |= VK_PIPELINE_STAGE_2_TRANSFER_BIT;
+  }
+
+  return static_cast<T&>(*this);
+}
+
+template<typename T>
+T& fwrk::PassBuilder<T>::set_image_transfer_dst(const ImageInfo& info)
+{
+  if (!try_access(info.resource.id)) return static_cast<T&>(*this);
+  auto& res = graph_->resource_deps_[info.resource.id];
+
+  ImageAccess& image = pass_->images.emplace_back(
+      info.resource.id, std::nullopt, info.aspect, info.base_level, info.level_count, info.base_layer, info.layer_count,
+      info.view_type, VK_ACCESS_2_TRANSFER_WRITE_BIT, info.stages, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+
+  if (image.stages == VK_PIPELINE_STAGE_2_NONE) {
+    image.stages |= VK_PIPELINE_STAGE_2_TRANSFER_BIT;
+  }
+
+  res.write_passes.push_back(id_);
+  return static_cast<T&>(*this);
+}
+
+template<typename T>
+T& fwrk::PassBuilder<T>::set_buffer_transfer_src(const BufferInfo& info)
+{
+  if (!try_access(info.resource.id)) return static_cast<T&>(*this);
+  auto& res = graph_->resource_deps_[info.resource.id];
+
+  res.read_passes.push_back(id_);
+  set_possible_explicit_read(info.resource.pass, res);
+
+  BufferAccess& buffer =
+      pass_->buffers.emplace_back(info.resource.id, info.size, info.offset, VK_ACCESS_2_TRANSFER_READ_BIT, info.stages);
+
+  if (buffer.stages == VK_PIPELINE_STAGE_2_NONE) {
+    buffer.stages |= VK_PIPELINE_STAGE_2_TRANSFER_BIT;
+  }
+
+  return static_cast<T&>(*this);
+}
+
+template<typename T>
+T& fwrk::PassBuilder<T>::set_buffer_transfer_dst(const BufferInfo& info)
+{
+  if (!try_access(info.resource.id)) return static_cast<T&>(*this);
+  auto& res = graph_->resource_deps_[info.resource.id];
+
+  BufferAccess& buffer = pass_->buffers.emplace_back(info.resource.id, info.size, info.offset,
+                                                     VK_ACCESS_2_TRANSFER_WRITE_BIT, info.stages);
+
+  if (buffer.stages == VK_PIPELINE_STAGE_2_NONE) {
+    buffer.stages |= VK_PIPELINE_STAGE_2_TRANSFER_BIT;
+  }
+
+  res.write_passes.push_back(id_);
+  return static_cast<T&>(*this);
+}
+
+template<typename T>
 T& fwrk::PassBuilder<T>::set_execute(std::function<void(VkCommandBuffer)> func)
 {
   pass_->func = std::move(func);
@@ -223,12 +297,10 @@ T& fwrk::PassBuilder<T>::set_execute(std::function<void(VkCommandBuffer)> func)
 template<typename T>
 void fwrk::PassBuilder<T>::set_buffer_read(const BufferInfo& info, const VkAccessFlags2 access)
 {
-  if (accessed_.contains(info.resource.id)) return;
-  accessed_.insert(info.resource.id);
+  if (!try_access(info.resource.id)) return;
   auto& res = graph_->resource_deps_[info.resource.id];
   res.read_passes.push_back(id_);
   set_possible_explicit_read(info.resource.pass, res);
-
 
   BufferAccess& buffer = pass_->buffers.emplace_back(info.resource.id, info.size, info.offset, access, info.stages);
 
