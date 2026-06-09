@@ -31,7 +31,7 @@ namespace fwrk {
     uint32_t base_layer = 0;
     VkImageViewType view_type = VK_IMAGE_VIEW_TYPE_2D;
     VkImageAspectFlags aspect = VK_IMAGE_ASPECT_NONE;
-    std::optional<ResolveInfo> resolve;
+    std::optional<ResolveInfo> resolve = std::nullopt;
   };
 
   struct ImageInfo {
