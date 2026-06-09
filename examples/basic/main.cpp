@@ -35,6 +35,7 @@ std::vector<uint32_t> read_spv(const char* path)
 
 int main()
 {
+  // glfwInitHint(GLFW_PLATFORM, GLFW_PLATFORM_X11); // for renderdoc
   glfwInit();
   glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
   glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
@@ -378,6 +379,7 @@ int main()
   {
     fwrk::Context context{device};
     std::vector<fwrk::ResourceID> swap_chain_imports{image_count};
+    fwrk::ResourceID depth_import{};
 
     auto recreate_swap_chain = [&] {
       vkDeviceWaitIdle(device);
@@ -420,6 +422,20 @@ int main()
       vmaDestroyImage(allocator, depth_image, depth_image_allocation);
       VK_CHECK(vmaCreateImage(allocator, &depth_image_create_info, &alloc_create_info, &depth_image,
                               &depth_image_allocation, nullptr));
+      const fwrk::ImageResource depth_image_res{.x = window_width,
+                                                .y = window_height,
+                                                .z = 1,
+                                                .format = depth_format,
+                                                .usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+                                                .aspect = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT,
+                                                .layer_count = 1,
+                                                .level_count = 1,
+                                                .state = fwrk::ImageState::Undefined};
+      if (depth_import) {
+        context.update_image(depth_import, depth_image_res, depth_image);
+      } else {
+        depth_import = context.import_image(depth_image_res, depth_image);
+      }
     };
 
     for (uint32_t i = 0; i < image_count; i++) {
@@ -434,6 +450,17 @@ int main()
                                                     .state = fwrk::ImageState::Undefined},
                                                    swap_chain_images[i], "Swapchain image");
     }
+
+    depth_import = context.import_image({.x = window_width,
+                                         .y = window_height,
+                                         .z = 1,
+                                         .format = depth_format,
+                                         .usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+                                         .aspect = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT,
+                                         .layer_count = 1,
+                                         .level_count = 1,
+                                         .state = fwrk::ImageState::Undefined},
+                                        depth_image);
 
     uint32_t frame_index = 0;
     while (!glfwWindowShouldClose(window)) {
@@ -466,10 +493,26 @@ int main()
       fwrk::Graph& graph = context.graph();
 
       graph.add_graphics_pass("RenderPass")
-          .set_color_attachment({.resource = {swap_chain_imports[image_index]}, .store_op = fwrk::StoreOp::Store})
-          .set_execute([]([[maybe_unused]] VkCommandBuffer cb) {
-            // whatever
-            std::cout << "whatever\n";
+          .set_color_attachment({.resource = {swap_chain_imports[image_index]},
+                                 .load_op = fwrk::LoadOp::Clear,
+                                 .store_op = fwrk::StoreOp::Store,
+                                 .clear_value = {1.0F, 1.0F, 1.0F, 1.0F}})
+          .set_depth_attachment(
+              {.resource = {depth_import}, .load_op = fwrk::LoadOp::Clear, .store_op = fwrk::StoreOp::Store})
+          .set_execute([&]([[maybe_unused]] VkCommandBuffer cb) {
+            constexpr VkViewport viewport{.width = static_cast<float>(window_width),
+                                          .height = static_cast<float>(window_height),
+                                          .minDepth = 0.0f,
+                                          .maxDepth = 1.0f};
+            vkCmdSetViewport(cb, 0, 1, &viewport);
+
+            constexpr VkRect2D scissor{
+                .extent{.width = static_cast<uint32_t>(window_width), .height = static_cast<uint32_t>(window_height)}};
+            vkCmdSetScissor(cb, 0, 1, &scissor);
+
+            vkCmdBindPipeline(cb, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+
+            vkCmdDraw(cb, 3, 1, 0, 0);
           });
 
       graph.set_image_end_state(
