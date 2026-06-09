@@ -87,8 +87,7 @@ void fwrk::Context::update_alias(const ResourceID alias, const ResourceID resour
   resources_[*alias.id].target = *resource.id;
 }
 
-VkImageView fwrk::Context::get_image_view(const VkImageSubresourceRange& subresource, const VkImageViewType view_type,
-                                          const Resource& resource)
+VkImageView fwrk::Context::get_image_view(const ViewKey& key, const Resource& resource)
 {
   if (device_ == VK_NULL_HANDLE) return VK_NULL_HANDLE;
   VkImage image_raw = raw_images_[resource.raw];
@@ -96,23 +95,23 @@ VkImageView fwrk::Context::get_image_view(const VkImageSubresourceRange& subreso
 
   auto& views = views_cache_[resource.slot];
 
-  const ViewKey key = {subresource.aspectMask,     subresource.baseMipLevel, subresource.levelCount,
-                       subresource.baseArrayLayer, subresource.layerCount,   view_type};
   auto it = views.find(key);
   if (it != views.end()) {
     return it->second;
   }
 
-  const VkImageViewCreateInfo view_create_info{
-      .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-      .pNext = nullptr,
-      .flags = 0u,
-      .image = image_raw,
-      .viewType = view_type,
-      .format = image.format,
-      .components = {},
-      .subresourceRange = subresource,
-  };
+  const VkImageViewCreateInfo view_create_info{.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+                                               .pNext = nullptr,
+                                               .flags = 0u,
+                                               .image = image_raw,
+                                               .viewType = key.view_type,
+                                               .format = image.format,
+                                               .components = {},
+                                               .subresourceRange = {.aspectMask = key.aspect,
+                                                                    .baseMipLevel = key.base_level,
+                                                                    .levelCount = key.level_count,
+                                                                    .baseArrayLayer = key.base_layer,
+                                                                    .layerCount = key.layer_count}};
 
   VkImageView view = VK_NULL_HANDLE;
   if (vkCreateImageView(device_, &view_create_info, nullptr, &view) != VK_SUCCESS) {

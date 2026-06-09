@@ -345,7 +345,7 @@ void fwrk::Graph::execute(VkCommandBuffer cmd)
         ImageResource& image = context_->images_.at(resource->slot);
         VkRenderingAttachmentInfo info{};
         info.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-        info.imageView = context_->get_image_view(att.subresource, att.view_type, *resource);
+        info.imageView = context_->get_image_view({att.subresource, att.view_type}, *resource);
         info.imageLayout = att.layout;
         if (att.resolve) {
           const Resource* resolve_resource = &context_->resources_.at(*att.resolve->resource.id); // sorta unsafe
@@ -353,7 +353,8 @@ void fwrk::Graph::execute(VkCommandBuffer cmd)
             assert(resource->target != UINT32_MAX && "Received an alias that targets nothing");
             resolve_resource = &context_->resources_.at(resolve_resource->target); // sorta unsafe
           }
-          info.resolveImageView = context_->get_image_view(att.resolve->subresource, att.view_type, *resolve_resource);
+          info.resolveImageView =
+              context_->get_image_view({att.resolve->subresource, att.view_type}, *resolve_resource);
           info.resolveMode = static_cast<VkResolveModeFlagBits>(att.resolve->mode);
           info.resolveImageLayout = att.layout;
         }
@@ -378,7 +379,7 @@ void fwrk::Graph::execute(VkCommandBuffer cmd)
 
         VkRenderingAttachmentInfo& info = depth_attachment.emplace();
         info.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-        info.imageView = context_->get_image_view(att.subresource, att.view_type, *resource);
+        info.imageView = context_->get_image_view({att.subresource, att.view_type}, *resource);
         info.imageLayout = att.layout;
         if (att.resolve) {
           const Resource* resolve_resource = &context_->resources_.at(*att.resolve->resource.id); // sorta unsafe
@@ -386,7 +387,8 @@ void fwrk::Graph::execute(VkCommandBuffer cmd)
             assert(resource->target != UINT32_MAX && "Received an alias that targets nothing");
             resolve_resource = &context_->resources_.at(resolve_resource->target); // sorta unsafe
           }
-          info.resolveImageView = context_->get_image_view(att.resolve->subresource, att.view_type, *resolve_resource);
+          info.resolveImageView =
+              context_->get_image_view({att.resolve->subresource, att.view_type}, *resolve_resource);
           info.resolveMode = static_cast<VkResolveModeFlagBits>(att.resolve->mode);
           info.resolveImageLayout = att.layout;
         }

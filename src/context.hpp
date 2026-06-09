@@ -15,18 +15,33 @@ namespace fwrk {
     seed ^= hasher(value) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
   }
 
-  using ViewKey = std::tuple<VkImageAspectFlags, uint32_t, uint32_t, uint32_t, uint32_t, VkImageViewType>;
+  struct ViewKey {
+    VkImageAspectFlags aspect;
+    uint32_t base_level;
+    uint32_t level_count;
+    uint32_t base_layer;
+    uint32_t layer_count;
+    VkImageViewType view_type;
+
+    ViewKey(const VkImageSubresourceRange& sub, const VkImageViewType view_type_) :
+        aspect(sub.aspectMask), base_level(sub.baseMipLevel), level_count(sub.levelCount),
+        base_layer(sub.baseArrayLayer), layer_count(sub.layerCount), view_type(view_type_)
+    {
+    }
+
+    bool operator==(const ViewKey&) const = default;
+  };
 
   struct ViewKeyHasher {
     size_t operator()(const ViewKey& key) const
     {
       size_t seed = 0;
-      hash_combine(seed, std::get<0>(key));
-      hash_combine(seed, std::get<1>(key));
-      hash_combine(seed, std::get<2>(key));
-      hash_combine(seed, std::get<3>(key));
-      hash_combine(seed, std::get<4>(key));
-      hash_combine(seed, std::get<5>(key));
+      hash_combine(seed, key.aspect);
+      hash_combine(seed, key.base_level);
+      hash_combine(seed, key.level_count);
+      hash_combine(seed, key.base_layer);
+      hash_combine(seed, key.layer_count);
+      hash_combine(seed, key.view_type);
       return seed;
     }
   };
@@ -79,8 +94,7 @@ namespace fwrk {
 
     std::vector<flat_hash_map<ViewKey, VkImageView, ViewKeyHasher>> views_cache_{};
 
-    VkImageView get_image_view(const VkImageSubresourceRange& subresource, VkImageViewType view_type,
-                               const Resource& resource);
+    VkImageView get_image_view(const ViewKey& key, const Resource& resource);
     void destroy_views(uint32_t slot);
 
     template<ImageInterface I>
