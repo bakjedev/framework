@@ -12,7 +12,6 @@ TEST(Framework, SimpleTest)
                                          .size = {1920, 1080, 1},
                                          .format = VK_FORMAT_R32G32B32A32_SFLOAT,
                                          .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
-                                         .aspect = VK_IMAGE_ASPECT_COLOR_BIT,
                                          .state = fwrk::ImageState::Undefined},
                                         nullptr, "RenderTarget");
 

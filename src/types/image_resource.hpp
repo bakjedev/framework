@@ -18,7 +18,6 @@ namespace fwrk {
     VkExtent3D size;
     VkFormat format;
     VkImageUsageFlags usage;
-    VkImageAspectFlags aspect;
 
     ImageState state;
   };
@@ -29,7 +28,6 @@ namespace fwrk {
     { img.size() } -> std::same_as<VkExtent3D>;
     { img.format() } -> std::same_as<VkFormat>;
     { img.usage() } -> std::same_as<VkImageUsageFlags>;
-    { img.aspect() } -> std::same_as<VkImageAspectFlags>;
     { img.image() } -> std::same_as<VkImage>;
   };
 } // namespace fwrk

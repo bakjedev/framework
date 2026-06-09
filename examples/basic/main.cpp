@@ -37,7 +37,6 @@ int main()
                                                .size = {swapchain.extent.width, swapchain.extent.height, 1},
                                                .format = swapchain.format,
                                                .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
-                                               .aspect = VK_IMAGE_ASPECT_COLOR_BIT,
                                                .state = fwrk::ImageState::Undefined};
       swapchain_imports.resize(swapchain.images.size());
       for (uint32_t i = 0; i < swapchain.images.size(); i++) {
@@ -53,7 +52,6 @@ int main()
                                                .size = {depth.extent.width, depth.extent.height, 1},
                                                .format = depth.format,
                                                .usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-                                               .aspect = VK_IMAGE_ASPECT_DEPTH_BIT,
                                                .state = fwrk::ImageState::Undefined};
       if (depth_import)
         context.update_image(depth_import, depth_img_desc, depth.image);
