@@ -35,9 +35,14 @@ bool fwrk::Graph::compile()
   // -------------------
   // Reset compiled data
   // -------------------
-  sorted_pass_ids_.clear();
-  end_dep_info_ = {};
   compiled_passes_.clear();
+  sorted_pass_ids_.clear();
+  compiled_end_image_states_.clear();
+  compiled_end_buffer_states_.clear();
+
+  compiled_end_image_states_ = end_image_states_;
+  compiled_end_buffer_states_ = end_buffer_states_;
+
 
   size_t pass_count = passes_.size();
 
@@ -243,6 +248,14 @@ bool fwrk::Graph::compile()
     }
   }
 
+  // -------------------
+  // Reset supplied data
+  // -------------------
+  passes_.clear();
+  resource_deps_.clear();
+  end_image_states_.clear();
+  end_buffer_states_.clear();
+
   return true;
 }
 
@@ -421,7 +434,7 @@ void fwrk::Graph::execute(VkCommandBuffer cmd)
   // Create end image barriers
   // --------------------------
   std::vector<VkImageMemoryBarrier2> end_image_barriers;
-  for (const auto& [id, state]: end_image_states_) {
+  for (const auto& [id, state]: compiled_end_image_states_) {
     const Resource* resource = &context_->resources_.at(*id.id);
     if (resource->type == ResourceType::Proxy) {
       assert(resource->target != UINT32_MAX && "Received a proxy that targets nothing");
@@ -452,7 +465,7 @@ void fwrk::Graph::execute(VkCommandBuffer cmd)
   // Create end buffer barriers
   // --------------------------
   std::vector<VkBufferMemoryBarrier2> end_buffer_barriers;
-  for (const auto& [id, state]: end_buffer_states_) {
+  for (const auto& [id, state]: compiled_end_buffer_states_) {
     const Resource* resource = &context_->resources_.at(*id.id);
     if (resource->type == ResourceType::Proxy) {
       assert(resource->target != UINT32_MAX && "Received a proxy that targets nothing");
@@ -493,14 +506,6 @@ void fwrk::Graph::execute(VkCommandBuffer cmd)
   // Execute end states
   // ------------------
   vkCmdPipelineBarrier2(cmd, &end_dep_info);
-
-  // -------------------
-  // Reset supplied data
-  // -------------------
-  passes_.clear();
-  resource_deps_.clear();
-  end_image_states_.clear();
-  end_buffer_states_.clear();
 }
 
 VkImageAspectFlags fwrk::Graph::get_aspect_for_format(const VkFormat format)

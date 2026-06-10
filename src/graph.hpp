@@ -90,7 +90,8 @@ namespace fwrk {
 
     std::vector<std::pair<ResourceID, ImageState>> end_image_states_;
     std::vector<std::pair<ResourceID, BufferState>> end_buffer_states_;
-    DependencyInfo end_dep_info_;
+    std::vector<std::pair<ResourceID, ImageState>> compiled_end_image_states_;
+    std::vector<std::pair<ResourceID, BufferState>> compiled_end_buffer_states_;
 
     Context* context_;
 
