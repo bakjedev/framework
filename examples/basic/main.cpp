@@ -26,7 +26,7 @@ int main()
 
   {
     // Creating the framework context
-    fwrk::Context context{backend.device};
+    fwrk::Context context{backend.device, frames_in_flight};
 
     std::vector<fwrk::ResourceID> swapchain_imports(swapchain.images.size());
     fwrk::ResourceID depth_import{};
@@ -36,7 +36,6 @@ int main()
       const fwrk::ImageResource color_img_desc{.type = VK_IMAGE_TYPE_2D,
                                                .size = {swapchain.extent.width, swapchain.extent.height, 1},
                                                .format = swapchain.format,
-                                               .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
                                                .state = fwrk::ImageState::Undefined};
       swapchain_imports.resize(swapchain.images.size());
       for (uint32_t i = 0; i < swapchain.images.size(); i++) {
@@ -51,7 +50,6 @@ int main()
       const fwrk::ImageResource depth_img_desc{.type = VK_IMAGE_TYPE_2D,
                                                .size = {depth.extent.width, depth.extent.height, 1},
                                                .format = depth.format,
-                                               .usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
                                                .state = fwrk::ImageState::Undefined};
       if (depth_import)
         context.update_image(depth_import, depth_img_desc, depth.image);

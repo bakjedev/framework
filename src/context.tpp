@@ -12,7 +12,7 @@ fwrk::ResourceID fwrk::Context::import_image(const I& image, const ImageState& s
   raw_images_.push_back(image.image());
 
   const auto id = resources_.size();
-  resources_.emplace_back(ResourceType::Image, slot_id, raw_id, std::move(name));
+  resources_.emplace_back(ResourceType::Image, slot_id, raw_id, false, std::move(name));
 
   return ResourceID{id};
 }
@@ -27,7 +27,7 @@ fwrk::ResourceID fwrk::Context::import_buffer(const I& buffer, const BufferState
   raw_buffers_.push_back(buffer.buffer());
 
   const auto id = resources_.size();
-  resources_.emplace_back(ResourceType::Buffer, slot_id, raw_id, std::move(name));
+  resources_.emplace_back(ResourceType::Buffer, slot_id, raw_id, false, std::move(name));
 
   return ResourceID{id};
 }
@@ -58,9 +58,5 @@ void fwrk::Context::update_buffer(const ResourceID resource, const I& buffer, co
 template<fwrk::ImageInterface I>
 fwrk::ImageResource fwrk::Context::construct_image(const I& image, const ImageState& state)
 {
-  return ImageResource{.type = image.type(),
-                       .size = image.size(),
-                       .format = image.format(),
-                       .usage = image.usage(),
-                       .state = state};
+  return ImageResource{.type = image.type(), .size = image.size(), .format = image.format(), .state = state};
 }

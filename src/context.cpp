@@ -1,4 +1,5 @@
 #include "context.hpp"
+#include <cassert>
 
 fwrk::Context::~Context()
 {
@@ -26,7 +27,7 @@ fwrk::ResourceID fwrk::Context::import_image(const ImageResource& image, VkImage
   raw_images_.push_back(raw);
 
   const auto id = resources_.size();
-  resources_.emplace_back(ResourceType::Image, slot_id, raw_id, std::move(name));
+  resources_.emplace_back(ResourceType::Image, slot_id, raw_id, false, std::move(name));
 
   return ResourceID{id};
 }
@@ -44,10 +45,18 @@ fwrk::ResourceID fwrk::Context::import_buffer(const BufferResource& buffer, VkBu
   raw_buffers_.push_back(raw);
 
   const auto id = resources_.size();
-  resources_.emplace_back(ResourceType::Buffer, slot_id, raw_id, std::move(name));
+  resources_.emplace_back(ResourceType::Buffer, slot_id, raw_id, false, std::move(name));
 
   return ResourceID{id};
 }
+
+// fwrk::ResourceID fwrk::Context::create_image(const ImageCreateInfo& info, std::string name)
+// {
+//   const auto id = resources_.size();
+//   resources_.emplace_back(ResourceType::Buffer, slot_id, raw_id, true, std::move(name));
+//
+//   return ResourceID{id};
+// }
 
 void fwrk::Context::update_image(const ResourceID resource, const ImageResource& image, VkImage raw)
 {
@@ -84,7 +93,7 @@ void fwrk::Context::update_proxy(const ResourceID proxy, const ResourceID resour
 {
   if (!proxy.id || !resource.id) return;
   if (resources_[*resource.id].type == ResourceType::Proxy) return;
-  resources_[*proxy.id].target = *resource.id;
+  resources_[*proxy.id].slot = *resource.id;
 }
 
 VkImageView fwrk::Context::get_image_view(const ViewKey& key, const Resource& resource)
@@ -134,4 +143,16 @@ void fwrk::Context::destroy_views(const uint32_t slot)
     }
   }
   views.clear();
+}
+
+fwrk::Resource& fwrk::Context::get_resource(const ResourceID id)
+{
+  assert(id.id.has_value() && "Invalid resource ID to resolve");
+  Resource* resource = &resources_.at(*id.id);
+  if (resource->type == ResourceType::Proxy) {
+    assert(resource->slot != UINT32_MAX && resource->slot < resources_.size() &&
+           "Received a proxy with an invalid target");
+    return resources_.at(resource->slot);
+  }
+  return *resource;
 }

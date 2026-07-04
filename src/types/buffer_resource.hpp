@@ -14,7 +14,6 @@ namespace fwrk {
 
   struct BufferResource {
     VkDeviceSize size;
-    VkBufferUsageFlags usage;
 
     BufferState state;
   };
@@ -22,7 +21,6 @@ namespace fwrk {
   template<typename T>
   concept BufferInterface = requires(const T& buf) {
     { buf.size() } -> std::same_as<VkDeviceSize>;
-    { buf.usage() } -> std::same_as<VkBufferUsageFlags>;
     { buf.buffer() } -> std::same_as<VkBuffer>;
   };
 } // namespace fwrk

@@ -17,7 +17,6 @@ namespace fwrk {
     VkImageType type;
     VkExtent3D size;
     VkFormat format;
-    VkImageUsageFlags usage;
 
     ImageState state;
   };
@@ -30,4 +29,10 @@ namespace fwrk {
     { img.usage() } -> std::same_as<VkImageUsageFlags>;
     { img.image() } -> std::same_as<VkImage>;
   };
+
+  // struct ImageCreateInfo {
+  //   VkImageType type;
+  //   VkExtent3D size;
+  //   VkFormat format;
+  // };
 } // namespace fwrk

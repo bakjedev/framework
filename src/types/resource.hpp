@@ -23,17 +23,18 @@ namespace fwrk {
     ResourceType type;
     uint32_t slot;
     uint32_t raw;
+    bool transient;
     std::string name;
-    uint32_t target;
 
-    Resource(const ResourceType type_, const size_t slot_, const size_t raw_, std::string name_) :
-        type(type_), slot(static_cast<uint32_t>(slot_)), raw(static_cast<uint32_t>(raw_)), name(std::move(name_)),
-        target(UINT32_MAX)
+    Resource(const ResourceType type_, const size_t slot_, const size_t raw_, const bool transient_,
+             std::string name_) :
+        type(type_), slot(static_cast<uint32_t>(slot_)), raw(static_cast<uint32_t>(raw_)), transient(transient_),
+        name(std::move(name_))
     {
     }
 
-    Resource(const ResourceType type_, const uint32_t target_, std::string name_) :
-        type(type_), slot(UINT32_MAX), raw(UINT32_MAX), name(std::move(name_)), target(target_)
+    Resource(const ResourceType type_, const uint32_t target, std::string name_) :
+        type(type_), slot(target), raw(UINT32_MAX), transient(false), name(std::move(name_))
     {
     }
   };

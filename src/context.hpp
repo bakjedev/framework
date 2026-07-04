@@ -48,7 +48,10 @@ namespace fwrk {
 
   class Context {
   public:
-    explicit Context(VkDevice device) : device_(device) {}
+    explicit Context(VkDevice device, const uint32_t frames_in_flight) :
+        device_(device), frames_in_flight_(frames_in_flight)
+    {
+    }
     ~Context();
 
     [[nodiscard]] ResourceID import_image(const ImageResource& image, VkImage raw, std::string name = "Unnamed image");
@@ -62,6 +65,8 @@ namespace fwrk {
     template<BufferInterface I>
     [[nodiscard]] ResourceID import_buffer(const I& buffer, const BufferState& state,
                                            std::string name = "Unnamed buffer");
+
+    // [[nodiscard]] ResourceID create_image(const ImageCreateInfo& info, std::string name = "Unnamed transient image");
 
     void update_image(ResourceID resource, const ImageResource& image, VkImage raw);
     void update_buffer(ResourceID resource, const BufferResource& buffer, VkBuffer raw);
@@ -89,6 +94,7 @@ namespace fwrk {
     std::vector<VkBuffer> raw_buffers_;
 
     VkDevice device_ = VK_NULL_HANDLE;
+    uint32_t frames_in_flight_ = 0;
 
     Graph graph_{this};
 
@@ -96,6 +102,8 @@ namespace fwrk {
 
     VkImageView get_image_view(const ViewKey& key, const Resource& resource);
     void destroy_views(uint32_t slot);
+
+    [[nodiscard]] Resource& get_resource(ResourceID id);
 
     template<ImageInterface I>
     static ImageResource construct_image(const I& image, const ImageState& state);

@@ -187,7 +187,7 @@ bool fwrk::Graph::compile()
       const Resource& resource = context_->resources_.at(*image_access.resource.id); // sorta unsafe
 
       VkImageAspectFlags aspect = image_access.aspect;
-      if (aspect == VK_IMAGE_ASPECT_NONE && resource.type == ResourceType::Image) {
+      if (aspect == VK_IMAGE_ASPECT_NONE) {
         const ImageResource& image = context_->images_.at(resource.slot);
         aspect = get_aspect_for_format(image.format);
       }
@@ -268,12 +268,8 @@ void fwrk::Graph::execute(VkCommandBuffer cmd)
     // ---------------------
     std::vector<VkImageMemoryBarrier2> image_barriers;
     for (const auto& img_barr: pass.deps.image_barriers) {
-      const Resource* resource = &context_->resources_.at(*img_barr.resource.id); // sorta unsafe
-      if (resource->type == ResourceType::Proxy) {
-        assert(resource->target != UINT32_MAX && "Received a proxy that targets nothing");
-        resource = &context_->resources_.at(resource->target); // sorta unsafe
-      }
-      ImageResource& image = context_->images_.at(resource->slot);
+      const Resource& resource = context_->get_resource(img_barr.resource);
+      ImageResource& image = context_->images_.at(resource.slot);
 
       if (image.state != img_barr.dst_state) {
         VkImageAspectFlags aspect = img_barr.subresource_range.aspectMask;
@@ -288,7 +284,7 @@ void fwrk::Graph::execute(VkCommandBuffer cmd)
         barrier.dstStageMask = img_barr.dst_state.stages;
         barrier.dstAccessMask = img_barr.dst_state.access;
         barrier.newLayout = img_barr.dst_state.layout;
-        barrier.image = context_->raw_images_.at(resource->raw);
+        barrier.image = context_->raw_images_.at(resource.raw);
         barrier.subresourceRange = {.aspectMask = aspect,
                                     .baseMipLevel = img_barr.subresource_range.baseMipLevel,
                                     .levelCount = img_barr.subresource_range.levelCount,
@@ -304,12 +300,8 @@ void fwrk::Graph::execute(VkCommandBuffer cmd)
     // ----------------------
     std::vector<VkBufferMemoryBarrier2> buffer_barriers;
     for (const auto& buf_barr: pass.deps.buffer_barriers) {
-      const Resource* resource = &context_->resources_.at(*buf_barr.resource.id); // sorta unsafe
-      if (resource->type == ResourceType::Proxy) {
-        assert((resource->target != UINT32_MAX) && "Received a proxy that targets nothing");
-        resource = &context_->resources_.at(resource->target); // sorta unsafe
-      }
-      BufferResource& buffer = context_->buffers_.at(resource->slot);
+      const Resource& resource = context_->get_resource(buf_barr.resource);
+      BufferResource& buffer = context_->buffers_.at(resource.slot);
 
       if (buffer.state != buf_barr.dst_state) {
         VkBufferMemoryBarrier2& barrier = buffer_barriers.emplace_back(VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2);
@@ -319,7 +311,7 @@ void fwrk::Graph::execute(VkCommandBuffer cmd)
         barrier.dstAccessMask = buf_barr.dst_state.access;
         barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
         barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        barrier.buffer = context_->raw_buffers_.at(resource->raw);
+        barrier.buffer = context_->raw_buffers_.at(resource.raw);
         barrier.offset = buf_barr.offset;
         barrier.size = buf_barr.size;
 
@@ -350,24 +342,15 @@ void fwrk::Graph::execute(VkCommandBuffer cmd)
       VkExtent2D extent{UINT32_MAX, UINT32_MAX};
 
       for (auto& att: pass.render->color_atts) {
-        const Resource* resource = &context_->resources_.at(*att.resource.id); // sorta unsafe
-        if (resource->type == ResourceType::Proxy) {
-          assert(resource->target != UINT32_MAX && "Received a proxy that targets nothing");
-          resource = &context_->resources_.at(resource->target); // sorta unsafe
-        }
-        ImageResource& image = context_->images_.at(resource->slot);
+        const Resource& resource = context_->get_resource(att.resource);
+        ImageResource& image = context_->images_.at(resource.slot);
         VkRenderingAttachmentInfo info{};
         info.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-        info.imageView = context_->get_image_view({att.subresource, att.view_type}, *resource);
+        info.imageView = context_->get_image_view({att.subresource, att.view_type}, resource);
         info.imageLayout = att.layout;
         if (att.resolve) {
-          const Resource* resolve_resource = &context_->resources_.at(*att.resolve->resource.id); // sorta unsafe
-          if (resolve_resource->type == ResourceType::Proxy) {
-            assert(resource->target != UINT32_MAX && "Received a proxy that targets nothing");
-            resolve_resource = &context_->resources_.at(resolve_resource->target); // sorta unsafe
-          }
-          info.resolveImageView =
-              context_->get_image_view({att.resolve->subresource, att.view_type}, *resolve_resource);
+          const Resource& resolve_resource = context_->get_resource(att.resolve->resource);
+          info.resolveImageView = context_->get_image_view({att.resolve->subresource, att.view_type}, resolve_resource);
           info.resolveMode = static_cast<VkResolveModeFlagBits>(att.resolve->mode);
           info.resolveImageLayout = att.layout;
         }
@@ -383,25 +366,16 @@ void fwrk::Graph::execute(VkCommandBuffer cmd)
 
       if (pass.render->depth_att) {
         const RenderingAttachmentInfo& att = *pass.render->depth_att;
-        const Resource* resource = &context_->resources_.at(*att.resource.id); // sorta unsafe
-        if (resource->type == ResourceType::Proxy) {
-          assert(resource->target != UINT32_MAX && "Received a proxy that targets nothing");
-          resource = &context_->resources_.at(resource->target); // sorta unsafe
-        }
-        ImageResource& image = context_->images_.at(resource->slot);
+        const Resource& resource = context_->get_resource(att.resource);
+        ImageResource& image = context_->images_.at(resource.slot);
 
         VkRenderingAttachmentInfo& info = depth_attachment.emplace();
         info.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-        info.imageView = context_->get_image_view({att.subresource, att.view_type}, *resource);
+        info.imageView = context_->get_image_view({att.subresource, att.view_type}, resource);
         info.imageLayout = att.layout;
         if (att.resolve) {
-          const Resource* resolve_resource = &context_->resources_.at(*att.resolve->resource.id); // sorta unsafe
-          if (resolve_resource->type == ResourceType::Proxy) {
-            assert(resource->target != UINT32_MAX && "Received a proxy that targets nothing");
-            resolve_resource = &context_->resources_.at(resolve_resource->target); // sorta unsafe
-          }
-          info.resolveImageView =
-              context_->get_image_view({att.resolve->subresource, att.view_type}, *resolve_resource);
+          const Resource& resolve_resource = context_->get_resource(att.resolve->resource);
+          info.resolveImageView = context_->get_image_view({att.resolve->subresource, att.view_type}, resolve_resource);
           info.resolveMode = static_cast<VkResolveModeFlagBits>(att.resolve->mode);
           info.resolveImageLayout = att.layout;
         }
@@ -435,12 +409,8 @@ void fwrk::Graph::execute(VkCommandBuffer cmd)
   // --------------------------
   std::vector<VkImageMemoryBarrier2> end_image_barriers;
   for (const auto& [id, state]: compiled_end_image_states_) {
-    const Resource* resource = &context_->resources_.at(*id.id);
-    if (resource->type == ResourceType::Proxy) {
-      assert(resource->target != UINT32_MAX && "Received a proxy that targets nothing");
-      resource = &context_->resources_.at(resource->target); // sorta unsafe
-    }
-    ImageResource& image = context_->images_.at(resource->slot);
+    const Resource& resource = context_->get_resource(id);
+    ImageResource& image = context_->images_.at(resource.slot);
 
     if (image.state != state) {
       VkImageMemoryBarrier2& barrier = end_image_barriers.emplace_back(VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2);
@@ -450,7 +420,7 @@ void fwrk::Graph::execute(VkCommandBuffer cmd)
       barrier.dstStageMask = state.stages;
       barrier.dstAccessMask = state.access;
       barrier.newLayout = state.layout;
-      barrier.image = context_->raw_images_.at(resource->raw);
+      barrier.image = context_->raw_images_.at(resource.raw);
       barrier.subresourceRange = {.aspectMask = get_aspect_for_format(image.format),
                                   .baseMipLevel = 0,
                                   .levelCount = VK_REMAINING_MIP_LEVELS,
@@ -466,12 +436,8 @@ void fwrk::Graph::execute(VkCommandBuffer cmd)
   // --------------------------
   std::vector<VkBufferMemoryBarrier2> end_buffer_barriers;
   for (const auto& [id, state]: compiled_end_buffer_states_) {
-    const Resource* resource = &context_->resources_.at(*id.id);
-    if (resource->type == ResourceType::Proxy) {
-      assert(resource->target != UINT32_MAX && "Received a proxy that targets nothing");
-      resource = &context_->resources_.at(resource->target); // sorta unsafe
-    }
-    BufferResource& buffer = context_->buffers_.at(resource->slot);
+    const Resource& resource = context_->get_resource(id);
+    BufferResource& buffer = context_->buffers_.at(resource.slot);
 
     if (buffer.state != state) {
       VkBufferMemoryBarrier2& barrier = end_buffer_barriers.emplace_back(VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2);
@@ -481,7 +447,7 @@ void fwrk::Graph::execute(VkCommandBuffer cmd)
       barrier.dstAccessMask = state.access;
       barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
       barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-      barrier.buffer = context_->raw_buffers_.at(resource->raw);
+      barrier.buffer = context_->raw_buffers_.at(resource.raw);
       barrier.offset = 0;
       barrier.size = VK_WHOLE_SIZE;
 
