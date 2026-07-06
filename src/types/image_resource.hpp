@@ -1,24 +1,54 @@
 #pragma once
+#include <vk_mem_alloc.h>
 #include <vulkan/vulkan.h>
 
+#include "physical_state.hpp"
+#include "util/flat_hash_map.hpp"
+#include "util/hash_combine.hpp"
+
 namespace fwrk {
-  struct ImageState {
-    VkAccessFlags2 access;
-    VkPipelineStageFlags2 stages;
-    VkImageLayout layout;
+  struct ViewKey {
+    VkImageAspectFlags aspect;
+    uint32_t base_level;
+    uint32_t level_count;
+    uint32_t base_layer;
+    uint32_t layer_count;
+    VkImageViewType view_type;
 
-    static const ImageState Undefined;
+    ViewKey(const VkImageSubresourceRange& sub, const VkImageViewType view_type_) :
+        aspect(sub.aspectMask), base_level(sub.baseMipLevel), level_count(sub.levelCount),
+        base_layer(sub.baseArrayLayer), layer_count(sub.layerCount), view_type(view_type_)
+    {
+    }
 
-    bool operator==(const ImageState& other) const = default;
+    bool operator==(const ViewKey&) const = default;
   };
-  constexpr ImageState ImageState::Undefined{VK_ACCESS_2_NONE, VK_PIPELINE_STAGE_2_NONE, VK_IMAGE_LAYOUT_UNDEFINED};
 
-  struct ImageResource {
+  struct ViewKeyHasher {
+    size_t operator()(const ViewKey& key) const
+    {
+      size_t seed = 0;
+      hash_combine(seed, key.aspect);
+      hash_combine(seed, key.base_level);
+      hash_combine(seed, key.level_count);
+      hash_combine(seed, key.base_layer);
+      hash_combine(seed, key.layer_count);
+      hash_combine(seed, key.view_type);
+      return seed;
+    }
+  };
+
+  struct Image {
     VkImageType type;
     VkExtent3D size;
     VkFormat format;
+  };
 
-    ImageState state;
+  struct PhysicalImage {
+    VkImage handle;
+    VmaAllocation allocation;
+    PhysicalState state;
+    flat_hash_map<ViewKey, VkImageView, ViewKeyHasher> views;
   };
 
   template<typename T>
@@ -26,13 +56,13 @@ namespace fwrk {
     { img.type() } -> std::same_as<VkImageType>;
     { img.size() } -> std::same_as<VkExtent3D>;
     { img.format() } -> std::same_as<VkFormat>;
-    { img.usage() } -> std::same_as<VkImageUsageFlags>;
     { img.image() } -> std::same_as<VkImage>;
   };
 
-  // struct ImageCreateInfo {
-  //   VkImageType type;
-  //   VkExtent3D size;
-  //   VkFormat format;
-  // };
+  struct ImageImportInfo {
+    VkImageType type;
+    VkExtent3D size;
+    VkFormat format;
+    PhysicalState state;
+  };
 } // namespace fwrk

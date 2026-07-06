@@ -5,12 +5,12 @@ TEST(Framework, SimpleTest)
 {
   fwrk::Context context{nullptr, 1};
 
-  const auto buf = context.import_buffer({.size = 0, .state = fwrk::BufferState::Undefined}, nullptr, "Data");
+  const auto buf = context.import_buffer({.size = 0, .state = fwrk::PhysicalState::Undefined}, nullptr, "Data");
 
   const auto img = context.import_image({.type = VK_IMAGE_TYPE_2D,
                                          .size = {1920, 1080, 1},
                                          .format = VK_FORMAT_R32G32B32A32_SFLOAT,
-                                         .state = fwrk::ImageState::Undefined},
+                                         .state = fwrk::PhysicalState::Undefined},
                                         nullptr, "RenderTarget");
 
   EXPECT_TRUE(buf);

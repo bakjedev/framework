@@ -38,13 +38,14 @@ sources = files(
     'src/pass_builder.cpp'
 )
 
-vulkan_dep = dependency('vulkan', include_type: 'system')
+vulkan_dep = dependency('vulkan', include_type : 'system')
+subdir('vendor/vma')
 
-framework_lib = library('framework-lib', sources, include_directories : include_directories('src'), dependencies : [vulkan_dep])
+framework_lib = library('framework-lib', sources, include_directories : include_directories('src'), dependencies : [vulkan_dep, vma_dep])
 framework_dep = declare_dependency(
     link_with : framework_lib,
     include_directories : include_directories('src'),
-    dependencies : [vulkan_dep]
+    dependencies : [vulkan_dep, vma_dep]
 )
 
 gtest_dep = dependency('gtest', main : true, required : false)
@@ -53,8 +54,6 @@ if gtest_dep.found()
     tests_exe = executable('framework-tests', 'tests/test_framework.cpp', dependencies : [gtest_dep, framework_dep])
     test('unit', tests_exe, protocol : 'gtest')
 endif
-
-subdir('vendor/vma')
 
 # examples
 subdir('examples/basic')

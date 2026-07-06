@@ -33,10 +33,10 @@ int main()
     fwrk::ResourceID swapchain_proxy = context.create_proxy();
 
     auto import_resources = [&] {
-      const fwrk::ImageResource color_img_desc{.type = VK_IMAGE_TYPE_2D,
-                                               .size = {swapchain.extent.width, swapchain.extent.height, 1},
-                                               .format = swapchain.format,
-                                               .state = fwrk::ImageState::Undefined};
+      const fwrk::ImageImportInfo color_img_desc{.type = VK_IMAGE_TYPE_2D,
+                                                 .size = {swapchain.extent.width, swapchain.extent.height, 1},
+                                                 .format = swapchain.format,
+                                                 .state = fwrk::PhysicalState::Undefined};
       swapchain_imports.resize(swapchain.images.size());
       for (uint32_t i = 0; i < swapchain.images.size(); i++) {
         fwrk::ResourceID& res = swapchain_imports[i];
@@ -47,13 +47,13 @@ int main()
         }
       }
 
-      const fwrk::ImageResource depth_img_desc{.type = VK_IMAGE_TYPE_2D,
-                                               .size = {depth.extent.width, depth.extent.height, 1},
-                                               .format = depth.format,
-                                               .state = fwrk::ImageState::Undefined};
-      if (depth_import)
+      const fwrk::ImageImportInfo depth_img_desc{.type = VK_IMAGE_TYPE_2D,
+                                                 .size = {depth.extent.width, depth.extent.height, 1},
+                                                 .format = depth.format,
+                                                 .state = fwrk::PhysicalState::Undefined};
+      if (depth_import) {
         context.update_image(depth_import, depth_img_desc, depth.image);
-      else
+      } else
         depth_import = context.import_image(depth_img_desc, depth.image);
     };
 
@@ -148,9 +148,8 @@ int main()
             vkCmdDraw(cb, 3, 1, 3, 0);
           });
 
-      graph.set_image_end_state(
-          swapchain_proxy,
-          {.access = VK_ACCESS_2_NONE, .stages = VK_PIPELINE_STAGE_2_NONE, .layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR});
+      graph.set_image_end_state(swapchain_proxy,
+                                {VK_ACCESS_2_NONE, VK_PIPELINE_STAGE_2_NONE, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR});
 
       static bool compiled = false;
       if (!compiled) {

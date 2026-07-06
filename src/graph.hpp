@@ -15,8 +15,8 @@ namespace fwrk {
 
   class Graph {
   public:
-    void set_image_end_state(ResourceID resource, const ImageState& state);
-    void set_buffer_end_state(ResourceID resource, const BufferState& state);
+    void set_image_end_state(ResourceID resource, const PhysicalState& state);
+    void set_buffer_end_state(ResourceID resource, const PhysicalState& state);
 
     [[nodiscard]] GraphicsPassBuilder add_graphics_pass(std::string name = "Unnamed graphics pass");
     [[nodiscard]] ComputePassBuilder add_compute_pass(std::string name = "Unnamed compute pass");
@@ -58,13 +58,13 @@ namespace fwrk {
 
     struct ImageMemoryBarrier {
       ResourceID resource;
-      ImageState dst_state{};
+      PhysicalState dst_state{};
       VkImageSubresourceRange subresource_range{};
     };
 
     struct BufferMemoryBarrier {
       ResourceID resource;
-      BufferState dst_state{};
+      PhysicalState dst_state{};
       VkDeviceSize size{};
       VkDeviceSize offset{};
     };
@@ -88,10 +88,10 @@ namespace fwrk {
     std::vector<uint32_t> sorted_pass_ids_;
     std::vector<CompiledPass> compiled_passes_;
 
-    std::vector<std::pair<ResourceID, ImageState>> end_image_states_;
-    std::vector<std::pair<ResourceID, BufferState>> end_buffer_states_;
-    std::vector<std::pair<ResourceID, ImageState>> compiled_end_image_states_;
-    std::vector<std::pair<ResourceID, BufferState>> compiled_end_buffer_states_;
+    std::vector<std::pair<ResourceID, PhysicalState>> end_image_states_;
+    std::vector<std::pair<ResourceID, PhysicalState>> end_buffer_states_;
+    std::vector<std::pair<ResourceID, PhysicalState>> compiled_end_image_states_;
+    std::vector<std::pair<ResourceID, PhysicalState>> compiled_end_buffer_states_;
 
     Context* context_;
 
