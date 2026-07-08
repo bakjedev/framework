@@ -1,5 +1,4 @@
 #include "context.hpp"
-#include <cassert>
 
 fwrk::Context::~Context()
 {
@@ -127,4 +126,28 @@ void fwrk::Context::destroy_views(PhysicalImage& image) const
     }
   }
   image.views.clear();
+}
+
+fwrk::PhysicalImage& fwrk::Context::get_physical_image(const uint64_t id, const ResourceType type)
+{
+  switch (type) {
+    case ResourceType::Import:
+      return images_.at(id);
+    case ResourceType::Transient:
+      return transient_images_.at(current_frame_).at(id);
+    default:
+      throw std::runtime_error("Passed in a proxy into get physical image");
+  }
+}
+
+fwrk::PhysicalBuffer& fwrk::Context::get_physical_buffer(const uint64_t id, const ResourceType type)
+{
+  switch (type) {
+    case ResourceType::Import:
+      return buffers_.at(id);
+    case ResourceType::Transient:
+      return transient_buffers_.at(current_frame_).at(id);
+    default:
+      throw std::runtime_error("Passed in a proxy into get physical buffer");
+  }
 }

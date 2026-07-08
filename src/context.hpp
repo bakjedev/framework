@@ -56,11 +56,15 @@ namespace fwrk {
 
     VkDevice device_ = VK_NULL_HANDLE;
     uint32_t frames_in_flight_ = 0;
+    uint32_t current_frame_ = 0;
 
     Graph graph_{this};
 
     [[nodiscard]] VkImageView get_image_view(const ViewKey& key, const Resource& resource);
     void destroy_views(PhysicalImage& image) const;
+
+    [[nodiscard]] PhysicalImage& get_physical_image(uint64_t id, ResourceType type);
+    [[nodiscard]] PhysicalBuffer& get_physical_buffer(uint64_t id, ResourceType type);
   };
 } // namespace fwrk
 

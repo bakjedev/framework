@@ -35,7 +35,8 @@ namespace fwrk {
 
     explicit Graph(Context* context) : context_(context) {}
 
-    [[nodiscard]] const Resource& resolve(ResourceID resource) const;
+    [[nodiscard]] ResourceID resolve_proxy(ResourceID resource) const;
+    [[nodiscard]] Resource& get_resource(ResourceID id);
 
     struct AttachmentResolveInfo {
       ResourceID resource;

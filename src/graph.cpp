@@ -267,8 +267,9 @@ void fwrk::Graph::execute(VkCommandBuffer cmd)
     // ---------------------
     std::vector<VkImageMemoryBarrier2> image_barriers;
     for (const auto& img_barr: pass.deps.image_barriers) {
-      const Resource& resource = resolve(img_barr.resource);
-      PhysicalImage& image = context_->images_.at(resource.physical_id);
+      const ResourceID resolved = resolve_proxy(img_barr.resource);
+      const Resource& resource = get_resource(resolved);
+      PhysicalImage& image = context_->get_physical_image(resource.physical_id, resolved.type());
 
       if (image.state != img_barr.dst_state) {
         VkImageAspectFlags aspect = img_barr.subresource_range.aspectMask;
@@ -299,8 +300,9 @@ void fwrk::Graph::execute(VkCommandBuffer cmd)
     // ----------------------
     std::vector<VkBufferMemoryBarrier2> buffer_barriers;
     for (const auto& buf_barr: pass.deps.buffer_barriers) {
-      const Resource& resource = resolve(buf_barr.resource);
-      PhysicalBuffer& buffer = context_->buffers_.at(resource.physical_id);
+      const ResourceID resolved = resolve_proxy(buf_barr.resource);
+      const Resource& resource = get_resource(resolved);
+      PhysicalBuffer& buffer = context_->get_physical_buffer(resource.physical_id, resolved.type());
 
       if (buffer.state != buf_barr.dst_state) {
         VkBufferMemoryBarrier2& barrier = buffer_barriers.emplace_back(VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2);
@@ -341,7 +343,7 @@ void fwrk::Graph::execute(VkCommandBuffer cmd)
       VkExtent2D extent{UINT32_MAX, UINT32_MAX};
 
       for (auto& att: pass.render->color_atts) {
-        const Resource& resource = resolve(att.resource);
+        const Resource& resource = get_resource(resolve_proxy(att.resource));
         const Image* image = std::get_if<Image>(&resource.desc);
         if (!image) continue;
 
@@ -350,7 +352,7 @@ void fwrk::Graph::execute(VkCommandBuffer cmd)
         info.imageView = context_->get_image_view({att.subresource, att.view_type}, resource);
         info.imageLayout = att.layout;
         if (att.resolve) {
-          const Resource& resolve_resource = resolve(att.resolve->resource);
+          const Resource& resolve_resource = get_resource(resolve_proxy(att.resolve->resource));
           info.resolveImageView = context_->get_image_view({att.resolve->subresource, att.view_type}, resolve_resource);
           info.resolveMode = static_cast<VkResolveModeFlagBits>(att.resolve->mode);
           info.resolveImageLayout = att.layout;
@@ -367,7 +369,7 @@ void fwrk::Graph::execute(VkCommandBuffer cmd)
 
       if (pass.render->depth_att) {
         const RenderingAttachmentInfo& att = *pass.render->depth_att;
-        const Resource& resource = resolve(att.resource);
+        const Resource& resource = get_resource(resolve_proxy(att.resource));
         const Image* image = std::get_if<Image>(&resource.desc);
         if (!image) continue;
 
@@ -376,7 +378,7 @@ void fwrk::Graph::execute(VkCommandBuffer cmd)
         info.imageView = context_->get_image_view({att.subresource, att.view_type}, resource);
         info.imageLayout = att.layout;
         if (att.resolve) {
-          const Resource& resolve_resource = resolve(att.resolve->resource);
+          const Resource& resolve_resource = get_resource(resolve_proxy(att.resolve->resource));
           info.resolveImageView = context_->get_image_view({att.resolve->subresource, att.view_type}, resolve_resource);
           info.resolveMode = static_cast<VkResolveModeFlagBits>(att.resolve->mode);
           info.resolveImageLayout = att.layout;
@@ -411,8 +413,9 @@ void fwrk::Graph::execute(VkCommandBuffer cmd)
   // --------------------------
   std::vector<VkImageMemoryBarrier2> end_image_barriers;
   for (const auto& [id, state]: compiled_end_image_states_) {
-    const Resource& resource = resolve(id);
-    PhysicalImage& physical = context_->images_.at(resource.physical_id);
+    const ResourceID resolved = resolve_proxy(id);
+    const Resource& resource = get_resource(resolved);
+    PhysicalImage& physical = context_->get_physical_image(resource.physical_id, resolved.type());
     const Image* image = std::get_if<Image>(&resource.desc);
     if (!image) continue;
 
@@ -440,8 +443,9 @@ void fwrk::Graph::execute(VkCommandBuffer cmd)
   // --------------------------
   std::vector<VkBufferMemoryBarrier2> end_buffer_barriers;
   for (const auto& [id, state]: compiled_end_buffer_states_) {
-    const Resource& resource = resolve(id);
-    PhysicalBuffer& physical = context_->buffers_.at(resource.physical_id);
+    const ResourceID resolved = resolve_proxy(id);
+    const Resource& resource = get_resource(resolved);
+    PhysicalBuffer& physical = context_->get_physical_buffer(resource.physical_id, resolved.type());
 
     if (physical.state != state) {
       VkBufferMemoryBarrier2& barrier = end_buffer_barriers.emplace_back(VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2);
@@ -477,19 +481,25 @@ void fwrk::Graph::execute(VkCommandBuffer cmd)
   // ------------------
   vkCmdPipelineBarrier2(cmd, &end_dep_info);
 }
-
-const fwrk::Resource& fwrk::Graph::resolve(const ResourceID resource) const
+fwrk::ResourceID fwrk::Graph::resolve_proxy(ResourceID resource) const
 {
   assert(resource && "Invalid resource ID for resolving proxy");
-  ResourceID resolved = resource;
-  if (resolved.type() == ResourceType::Proxy) {
-    resolved = context_->proxies_.at(resource.index());
+  if (resource.type() == ResourceType::Proxy) {
+    return context_->proxies_.at(resource.index());
   }
+  return resource;
+}
 
-  if (resolved.type() == ResourceType::Import) {
-    return context_->resources_.at(resolved.index());
+fwrk::Resource& fwrk::Graph::get_resource(const ResourceID id)
+{
+  switch (id.type()) {
+    case ResourceType::Import:
+      return context_->resources_.at(id.index());
+    case ResourceType::Transient:
+      return compiled_transients_.at(id.index());
+    default:
+      throw std::runtime_error("Passed in a proxy into get resource");
   }
-  return compiled_transients_.at(resolved.index());
 }
 
 VkImageAspectFlags fwrk::Graph::get_aspect_for_format(const VkFormat format)
