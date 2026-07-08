@@ -489,7 +489,7 @@ const fwrk::Resource& fwrk::Graph::resolve(const ResourceID resource) const
   if (resolved.type() == ResourceType::Import) {
     return context_->resources_.at(resolved.index());
   }
-  return transients_.at(resolved.index());
+  return compiled_transients_.at(resolved.index());
 }
 
 VkImageAspectFlags fwrk::Graph::get_aspect_for_format(const VkFormat format)
