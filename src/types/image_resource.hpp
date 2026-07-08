@@ -65,4 +65,10 @@ namespace fwrk {
     VkFormat format;
     PhysicalState state;
   };
+
+  struct ImageCreateInfo {
+    VkImageType type;
+    VkExtent3D size;
+    VkFormat format;
+  };
 } // namespace fwrk

@@ -30,6 +30,15 @@ fwrk::ComputePassBuilder fwrk::Graph::add_compute_pass(std::string name)
   return ComputePassBuilder{&passes_.back(), this, id};
 }
 
+fwrk::ResourceID fwrk::Graph::create_image(const ImageCreateInfo& info, std::string name) const
+{
+  const auto id = context_->resources_.size();
+  context_->resources_.emplace_back(ResourceType::Transient, Image{info.type, info.size, info.format}, SIZE_MAX,
+                                    std::move(name));
+
+  return ResourceID{id};
+}
+
 bool fwrk::Graph::compile()
 {
   // -------------------

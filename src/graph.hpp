@@ -21,6 +21,9 @@ namespace fwrk {
     [[nodiscard]] GraphicsPassBuilder add_graphics_pass(std::string name = "Unnamed graphics pass");
     [[nodiscard]] ComputePassBuilder add_compute_pass(std::string name = "Unnamed compute pass");
 
+    [[nodiscard]] ResourceID create_image(const ImageCreateInfo& info,
+                                          std::string name = "Unnamed transient image") const;
+
     bool compile();
 
     void execute(VkCommandBuffer cmd);
@@ -92,6 +95,9 @@ namespace fwrk {
     std::vector<std::pair<ResourceID, PhysicalState>> end_buffer_states_;
     std::vector<std::pair<ResourceID, PhysicalState>> compiled_end_image_states_;
     std::vector<std::pair<ResourceID, PhysicalState>> compiled_end_buffer_states_;
+
+    std::vector<Resource> transients_;
+    std::vector<Resource> compiled_transients_;
 
     Context* context_;
 
