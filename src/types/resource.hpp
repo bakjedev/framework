@@ -1,4 +1,5 @@
 #pragma once
+#include <cassert>
 #include <iostream>
 #include <string>
 #include <variant>
@@ -8,26 +9,36 @@
 #include "util/flat_hash_map.hpp"
 
 namespace fwrk {
-  struct ResourceID {
-    size_t id;
+  enum class ResourceType : uint64_t { Import = 0, Transient = 1, Proxy = 2 };
 
-    ResourceID() : id(SIZE_MAX) {}
-    explicit ResourceID(const size_t id_) : id(id_) {}
-    explicit operator bool() const { return id != SIZE_MAX; }
+  class ResourceID {
+    uint64_t bits;
+
+    static constexpr uint64_t TypeShift = 62;
+    static constexpr uint64_t IdMask = (1ull << TypeShift) - 1;
+
+  public:
+    [[nodiscard]] ResourceType type() const { return static_cast<ResourceType>(bits >> TypeShift); }
+    [[nodiscard]] uint64_t index() const { return bits & IdMask; }
+    [[nodiscard]] uint64_t raw() const { return bits; }
+    [[nodiscard]] bool valid() const { return bits != UINT64_MAX; }
+
+    ResourceID() : bits(UINT64_MAX) {}
+    explicit ResourceID(const ResourceType type, const uint64_t id) :
+        bits(static_cast<uint64_t>(type) << TypeShift | id)
+    {
+      assert(id <= IdMask && "index overflows into type field");
+    }
+    explicit operator bool() const { return valid(); }
     bool operator==(const ResourceID&) const = default;
   };
 
-  enum class ResourceType : uint8_t { Import, Transient, Proxy };
   using ResourceDesc = std::variant<Image, Buffer>;
 
   struct Resource {
-    ResourceType type;
     ResourceDesc desc;
-    size_t physical_id;
+    uint64_t physical_id;
     std::string name;
-
-    [[nodiscard]] bool is_image() const { return desc.index() == 0; }
-    [[nodiscard]] bool is_buffer() const { return desc.index() == 1; }
   };
 
   struct ResourceDependencies {
@@ -39,5 +50,5 @@ namespace fwrk {
 
 template<>
 struct std::hash<fwrk::ResourceID> {
-  size_t operator()(const fwrk::ResourceID& resource) const noexcept { return std::hash<size_t>{}(resource.id); }
+  size_t operator()(const fwrk::ResourceID& resource) const noexcept { return std::hash<size_t>{}(resource.raw()); }
 };

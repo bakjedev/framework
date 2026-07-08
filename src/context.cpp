@@ -20,9 +20,9 @@ fwrk::ResourceID fwrk::Context::import_image(const ImageImportInfo& info, VkImag
   images_.emplace_back(raw, VK_NULL_HANDLE, info.state);
 
   const auto id = resources_.size();
-  resources_.emplace_back(ResourceType::Import, Image{info.type, info.size, info.format}, physical_id, std::move(name));
+  resources_.emplace_back(Image{info.type, info.size, info.format}, physical_id, std::move(name));
 
-  return ResourceID{id};
+  return ResourceID{ResourceType::Import, id};
 }
 
 fwrk::ResourceID fwrk::Context::import_buffer(const BufferImportInfo& info, VkBuffer raw, std::string name)
@@ -31,57 +31,62 @@ fwrk::ResourceID fwrk::Context::import_buffer(const BufferImportInfo& info, VkBu
   buffers_.emplace_back(raw, VK_NULL_HANDLE, info.state);
 
   const auto id = resources_.size();
-  resources_.emplace_back(ResourceType::Import, Buffer{info.size}, physical_id, std::move(name));
+  resources_.emplace_back(Buffer{info.size}, physical_id, std::move(name));
 
-  return ResourceID{id};
+  return ResourceID{ResourceType::Import, id};
 }
 
 void fwrk::Context::update_image(const ResourceID resource, const ImageImportInfo& info, VkImage raw)
 {
-  Resource& res = resources_.at(resource.id);
-  PhysicalImage& phys = images_.at(res.physical_id);
+  if (!resource || resource.type() != ResourceType::Import || resource.type() == ResourceType::Transient) return;
+  Resource& res = resources_.at(resource.index());
+  if (!std::holds_alternative<Image>(res.desc)) return;
 
+  PhysicalImage& phys = images_.at(res.physical_id);
   destroy_views(phys);
-  if (auto* img = std::get_if<Image>(&res.desc)) {
-    img->type = info.type;
-    img->size = info.size;
-    img->format = info.format;
-  }
+
+  auto& [type, size, format] = std::get<Image>(res.desc);
+  type = info.type;
+  size = info.size;
+  format = info.format;
+
   phys.state = info.state;
   phys.handle = raw;
 }
 
 void fwrk::Context::update_buffer(const ResourceID resource, const BufferImportInfo& info, VkBuffer raw)
 {
-  Resource& res = resources_.at(resource.id);
-  PhysicalBuffer& phys = buffers_.at(res.physical_id);
+  if (!resource || resource.type() != ResourceType::Import || resource.type() == ResourceType::Transient) return;
+  Resource& res = resources_.at(resource.index());
+  if (!std::holds_alternative<Buffer>(res.desc)) return;
 
-  if (auto* buf = std::get_if<Buffer>(&res.desc)) {
-    buf->size = info.size;
-  }
+  auto& [size] = std::get<Buffer>(res.desc);
+  size = info.size;
+
+  PhysicalBuffer& phys = buffers_.at(res.physical_id);
   phys.state = info.state;
   phys.handle = raw;
 }
 
-fwrk::ResourceID fwrk::Context::create_proxy(const ResourceID resource, std::string name)
+fwrk::ResourceID fwrk::Context::create_proxy(const ResourceID resource)
 {
-  if (resource && resources_.at(resource.id).type == ResourceType::Proxy) return {};
+  if (resource && (resource.type() == ResourceType::Proxy || resource.type() == ResourceType::Transient)) return {};
 
-  const auto id = resources_.size();
-  resources_.emplace_back(ResourceType::Proxy, ResourceDesc{}, resource.id, std::move(name));
+  const auto id = proxies_.size();
+  proxies_.push_back(resource);
 
-  return ResourceID{id};
+  return ResourceID{ResourceType::Proxy, id};
 }
 
 void fwrk::Context::update_proxy(const ResourceID proxy, const ResourceID resource)
 {
-  if (resources_.at(resource.id).type == ResourceType::Proxy) return;
-  resources_.at(proxy.id).physical_id = resource.id;
+  if (!resource || resource.type() == ResourceType::Proxy || resource.type() == ResourceType::Transient) return;
+  proxies_.at(proxy.index()) = resource;
 }
 
 VkImageView fwrk::Context::get_image_view(const ViewKey& key, const Resource& resource)
 {
-  if (device_ == VK_NULL_HANDLE || resource.type == ResourceType::Proxy) return VK_NULL_HANDLE;
+  if (device_ == VK_NULL_HANDLE || !std::holds_alternative<Image>(resource.desc)) return VK_NULL_HANDLE;
 
   PhysicalImage& phys = images_.at(resource.physical_id);
 
@@ -90,15 +95,12 @@ VkImageView fwrk::Context::get_image_view(const ViewKey& key, const Resource& re
     return it->second;
   }
 
-  auto* img = std::get_if<Image>(&resource.desc);
-  if (!img) return VK_NULL_HANDLE;
-
   const VkImageViewCreateInfo view_create_info{.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
                                                .pNext = nullptr,
                                                .flags = 0u,
                                                .image = phys.handle,
                                                .viewType = key.view_type,
-                                               .format = img->format,
+                                               .format = std::get<Image>(resource.desc).format,
                                                .components = {},
                                                .subresourceRange = {.aspectMask = key.aspect,
                                                                     .baseMipLevel = key.base_level,
@@ -125,14 +127,4 @@ void fwrk::Context::destroy_views(PhysicalImage& image) const
     }
   }
   image.views.clear();
-}
-
-const fwrk::Resource& fwrk::Context::resolve_proxy(const ResourceID resource) const
-{
-  assert(resource && "Invalid resource ID for resolving proxy");
-  const Resource* res = &resources_.at(resource.id);
-  if (res->type == ResourceType::Proxy) {
-    res = &resources_.at(res->physical_id);
-  }
-  return *res;
 }

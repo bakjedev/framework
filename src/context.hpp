@@ -38,7 +38,7 @@ namespace fwrk {
     template<BufferInterface I>
     void update_buffer(ResourceID resource, const I& buffer, const PhysicalState& state);
 
-    [[nodiscard]] ResourceID create_proxy(ResourceID resource = {}, std::string name = "Unnamed proxy");
+    [[nodiscard]] ResourceID create_proxy(ResourceID resource = {});
     void update_proxy(ResourceID proxy, ResourceID resource);
 
     [[nodiscard]] Graph& graph() { return graph_; }
@@ -49,6 +49,7 @@ namespace fwrk {
 
     std::vector<PhysicalImage> images_;
     std::vector<PhysicalBuffer> buffers_;
+    std::vector<ResourceID> proxies_;
 
     std::vector<std::vector<PhysicalImage>> transient_images_;
     std::vector<std::vector<PhysicalBuffer>> transient_buffers_;
@@ -60,8 +61,6 @@ namespace fwrk {
 
     [[nodiscard]] VkImageView get_image_view(const ViewKey& key, const Resource& resource);
     void destroy_views(PhysicalImage& image) const;
-
-    [[nodiscard]] const Resource& resolve_proxy(ResourceID resource) const;
   };
 } // namespace fwrk
 

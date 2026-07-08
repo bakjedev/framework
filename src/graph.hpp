@@ -21,8 +21,7 @@ namespace fwrk {
     [[nodiscard]] GraphicsPassBuilder add_graphics_pass(std::string name = "Unnamed graphics pass");
     [[nodiscard]] ComputePassBuilder add_compute_pass(std::string name = "Unnamed compute pass");
 
-    [[nodiscard]] ResourceID create_image(const ImageCreateInfo& info,
-                                          std::string name = "Unnamed transient image") const;
+    [[nodiscard]] ResourceID create_image(const ImageCreateInfo& info, std::string name = "Unnamed transient image");
 
     bool compile();
 
@@ -35,6 +34,8 @@ namespace fwrk {
     friend class GraphicsPassBuilder;
 
     explicit Graph(Context* context) : context_(context) {}
+
+    [[nodiscard]] const Resource& resolve(ResourceID resource) const;
 
     struct AttachmentResolveInfo {
       ResourceID resource;
