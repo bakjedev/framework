@@ -344,51 +344,55 @@ void fwrk::Graph::execute(VkCommandBuffer cmd)
 
       for (auto& att: pass.render->color_atts) {
         const Resource& resource = get_resource(resolve_proxy(att.resource));
-        const Image* image = std::get_if<Image>(&resource.desc);
-        if (!image) continue;
+        if (std::holds_alternative<Image>(resource.desc)) {
+          const auto& image = std::get<Image>(resource.desc);
 
-        VkRenderingAttachmentInfo info{};
-        info.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-        info.imageView = context_->get_image_view({att.subresource, att.view_type}, resource);
-        info.imageLayout = att.layout;
-        if (att.resolve) {
-          const Resource& resolve_resource = get_resource(resolve_proxy(att.resolve->resource));
-          info.resolveImageView = context_->get_image_view({att.resolve->subresource, att.view_type}, resolve_resource);
-          info.resolveMode = static_cast<VkResolveModeFlagBits>(att.resolve->mode);
-          info.resolveImageLayout = att.layout;
+          VkRenderingAttachmentInfo info{};
+          info.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+          info.imageView = context_->get_image_view({att.subresource, att.view_type}, resource);
+          info.imageLayout = att.layout;
+          if (att.resolve) {
+            const Resource& resolve_resource = get_resource(resolve_proxy(att.resolve->resource));
+            info.resolveImageView =
+                context_->get_image_view({att.resolve->subresource, att.view_type}, resolve_resource);
+            info.resolveMode = static_cast<VkResolveModeFlagBits>(att.resolve->mode);
+            info.resolveImageLayout = att.layout;
+          }
+          info.loadOp = att.load_op;
+          info.storeOp = att.store_op;
+          info.clearValue = att.clear_value;
+
+          color_attachments.push_back(info);
+
+          extent.width = std::min(extent.width, std::max(1u, image.size.width >> att.subresource.baseMipLevel));
+          extent.height = std::min(extent.height, std::max(1u, image.size.height >> att.subresource.baseMipLevel));
         }
-        info.loadOp = att.load_op;
-        info.storeOp = att.store_op;
-        info.clearValue = att.clear_value;
-
-        color_attachments.push_back(info);
-
-        extent.width = std::min(extent.width, std::max(1u, image->size.width >> att.subresource.baseMipLevel));
-        extent.height = std::min(extent.height, std::max(1u, image->size.height >> att.subresource.baseMipLevel));
       }
 
       if (pass.render->depth_att) {
         const RenderingAttachmentInfo& att = *pass.render->depth_att;
         const Resource& resource = get_resource(resolve_proxy(att.resource));
-        const Image* image = std::get_if<Image>(&resource.desc);
-        if (!image) continue;
+        if (std::holds_alternative<Image>(resource.desc)) {
+          const auto& image = std::get<Image>(resource.desc);
 
-        VkRenderingAttachmentInfo& info = depth_attachment.emplace();
-        info.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-        info.imageView = context_->get_image_view({att.subresource, att.view_type}, resource);
-        info.imageLayout = att.layout;
-        if (att.resolve) {
-          const Resource& resolve_resource = get_resource(resolve_proxy(att.resolve->resource));
-          info.resolveImageView = context_->get_image_view({att.resolve->subresource, att.view_type}, resolve_resource);
-          info.resolveMode = static_cast<VkResolveModeFlagBits>(att.resolve->mode);
-          info.resolveImageLayout = att.layout;
+          VkRenderingAttachmentInfo& info = depth_attachment.emplace();
+          info.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+          info.imageView = context_->get_image_view({att.subresource, att.view_type}, resource);
+          info.imageLayout = att.layout;
+          if (att.resolve) {
+            const Resource& resolve_resource = get_resource(resolve_proxy(att.resolve->resource));
+            info.resolveImageView =
+                context_->get_image_view({att.resolve->subresource, att.view_type}, resolve_resource);
+            info.resolveMode = static_cast<VkResolveModeFlagBits>(att.resolve->mode);
+            info.resolveImageLayout = att.layout;
+          }
+          info.loadOp = att.load_op;
+          info.storeOp = att.store_op;
+          info.clearValue = att.clear_value;
+
+          extent.width = std::min(extent.width, std::max(1u, image.size.width >> att.subresource.baseMipLevel));
+          extent.height = std::min(extent.height, std::max(1u, image.size.height >> att.subresource.baseMipLevel));
         }
-        info.loadOp = att.load_op;
-        info.storeOp = att.store_op;
-        info.clearValue = att.clear_value;
-
-        extent.width = std::min(extent.width, std::max(1u, image->size.width >> att.subresource.baseMipLevel));
-        extent.height = std::min(extent.height, std::max(1u, image->size.height >> att.subresource.baseMipLevel));
       }
       rendering_info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
       rendering_info.layerCount = pass.render->render_info.layer_count;
@@ -415,9 +419,9 @@ void fwrk::Graph::execute(VkCommandBuffer cmd)
   for (const auto& [id, state]: compiled_end_image_states_) {
     const ResourceID resolved = resolve_proxy(id);
     const Resource& resource = get_resource(resolved);
+    if (!std::holds_alternative<Image>(resource.desc)) continue;
+
     PhysicalImage& physical = context_->get_physical_image(resource.physical_id, resolved.type());
-    const Image* image = std::get_if<Image>(&resource.desc);
-    if (!image) continue;
 
     if (physical.state != state) {
       VkImageMemoryBarrier2& barrier = end_image_barriers.emplace_back(VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2);
@@ -428,7 +432,7 @@ void fwrk::Graph::execute(VkCommandBuffer cmd)
       barrier.dstAccessMask = state.access;
       barrier.newLayout = state.layout;
       barrier.image = physical.handle;
-      barrier.subresourceRange = {.aspectMask = get_aspect_for_format(image->format),
+      barrier.subresourceRange = {.aspectMask = get_aspect_for_format(std::get<Image>(resource.desc).format),
                                   .baseMipLevel = 0,
                                   .levelCount = VK_REMAINING_MIP_LEVELS,
                                   .baseArrayLayer = 0,
@@ -445,6 +449,8 @@ void fwrk::Graph::execute(VkCommandBuffer cmd)
   for (const auto& [id, state]: compiled_end_buffer_states_) {
     const ResourceID resolved = resolve_proxy(id);
     const Resource& resource = get_resource(resolved);
+    if (!std::holds_alternative<Buffer>(resource.desc)) continue;
+
     PhysicalBuffer& physical = context_->get_physical_buffer(resource.physical_id, resolved.type());
 
     if (physical.state != state) {
