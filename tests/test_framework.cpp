@@ -3,7 +3,7 @@
 
 TEST(Framework, SimpleTest)
 {
-  fwrk::Context context{nullptr, 1};
+  fwrk::Context context{nullptr, nullptr, 1};
 
   const auto buf = context.import_buffer({.size = 0, .state = fwrk::PhysicalState::Undefined}, nullptr, "Data");
 

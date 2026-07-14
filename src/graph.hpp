@@ -86,6 +86,12 @@ namespace fwrk {
       std::function<void(VkCommandBuffer cmd)> func;
     };
 
+    using TransientDesc = std::variant<ImageCreateInfo, BufferCreateInfo>;
+    struct TransientInfo {
+      TransientDesc desc;
+      std::string name;
+    };
+
     flat_hash_map<ResourceID, ResourceDependencies> resource_deps_;
 
     std::vector<Pass> passes_;
@@ -98,8 +104,8 @@ namespace fwrk {
     std::vector<std::pair<ResourceID, PhysicalState>> compiled_end_image_states_;
     std::vector<std::pair<ResourceID, PhysicalState>> compiled_end_buffer_states_;
 
+    std::vector<TransientInfo> transient_infos_;
     std::vector<Resource> transients_;
-    std::vector<Resource> compiled_transients_;
 
     Context* context_;
 

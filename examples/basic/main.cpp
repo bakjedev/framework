@@ -26,7 +26,7 @@ int main()
 
   {
     // Creating the framework context
-    fwrk::Context context{backend.device, frames_in_flight};
+    fwrk::Context context{backend.device, backend.physical_device, frames_in_flight};
 
     std::vector<fwrk::ResourceID> swapchain_imports(swapchain.images.size());
     fwrk::ResourceID depth_import{};

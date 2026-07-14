@@ -9,9 +9,8 @@
 namespace fwrk {
   class Context {
   public:
-    explicit Context(VkDevice device, const uint32_t frames_in_flight) :
-        transient_images_(frames_in_flight), transient_buffers_(frames_in_flight), device_(device),
-        frames_in_flight_(frames_in_flight)
+    explicit Context(VkDevice device, VkPhysicalDevice physical_device, const uint32_t frames_in_flight) :
+        device_(device), physical_device_(physical_device), frames_in_flight_(frames_in_flight)
     {
     }
     ~Context();
@@ -51,10 +50,8 @@ namespace fwrk {
     std::vector<PhysicalBuffer> buffers_;
     std::vector<ResourceID> proxies_;
 
-    std::vector<std::vector<PhysicalImage>> transient_images_;
-    std::vector<std::vector<PhysicalBuffer>> transient_buffers_;
-
     VkDevice device_ = VK_NULL_HANDLE;
+    VkPhysicalDevice physical_device_ = VK_NULL_HANDLE;
     uint32_t frames_in_flight_ = 0;
     uint32_t current_frame_ = 0;
 

@@ -32,8 +32,8 @@ fwrk::ComputePassBuilder fwrk::Graph::add_compute_pass(std::string name)
 
 fwrk::ResourceID fwrk::Graph::create_image(const ImageCreateInfo& info, std::string name)
 {
-  const auto id = transients_.size();
-  transients_.emplace_back(Image{info.type, info.size, info.format}, UINT64_MAX, std::move(name));
+  const auto id = transient_infos_.size();
+  transient_infos_.emplace_back(info, std::move(name));
 
   return ResourceID{ResourceType::Transient, id};
 }
@@ -47,6 +47,7 @@ bool fwrk::Graph::compile()
   sorted_pass_ids_.clear();
   compiled_end_image_states_.clear();
   compiled_end_buffer_states_.clear();
+  transients_.clear();
 
   compiled_end_image_states_ = end_image_states_;
   compiled_end_buffer_states_ = end_buffer_states_;
@@ -254,6 +255,7 @@ bool fwrk::Graph::compile()
   resource_deps_.clear();
   end_image_states_.clear();
   end_buffer_states_.clear();
+  transient_infos_.clear();
 
   return true;
 }
@@ -502,7 +504,7 @@ fwrk::Resource& fwrk::Graph::get_resource(const ResourceID id)
     case ResourceType::Import:
       return context_->resources_.at(id.index());
     case ResourceType::Transient:
-      return compiled_transients_.at(id.index());
+      return transients_.at(id.index());
     default:
       throw std::runtime_error("Passed in a proxy into get resource");
   }

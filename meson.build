@@ -41,11 +41,11 @@ sources = files(
 vulkan_dep = dependency('vulkan', include_type : 'system')
 subdir('vendor/vma')
 
-framework_lib = library('framework-lib', sources, include_directories : include_directories('src'), dependencies : [vulkan_dep, vma_dep])
+framework_lib = library('framework-lib', sources, include_directories : include_directories('src'), dependencies : [vulkan_dep])
 framework_dep = declare_dependency(
     link_with : framework_lib,
     include_directories : include_directories('src'),
-    dependencies : [vulkan_dep, vma_dep]
+    dependencies : [vulkan_dep]
 )
 
 gtest_dep = dependency('gtest', main : true, required : false)

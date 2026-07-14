@@ -1,5 +1,4 @@
 #pragma once
-#include <vk_mem_alloc.h>
 #include <vulkan/vulkan.h>
 
 #include "physical_state.hpp"
@@ -11,7 +10,6 @@ namespace fwrk {
 
   struct PhysicalBuffer {
     VkBuffer handle;
-    VmaAllocation allocation;
     PhysicalState state;
   };
 
@@ -24,5 +22,9 @@ namespace fwrk {
   struct BufferImportInfo {
     VkDeviceSize size;
     PhysicalState state;
+  };
+
+  struct BufferCreateInfo {
+    VkDeviceSize size;
   };
 } // namespace fwrk

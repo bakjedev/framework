@@ -16,7 +16,7 @@ fwrk::Context::~Context()
 fwrk::ResourceID fwrk::Context::import_image(const ImageImportInfo& info, VkImage raw, std::string name)
 {
   const auto physical_id = images_.size();
-  images_.emplace_back(raw, VK_NULL_HANDLE, info.state);
+  images_.emplace_back(raw, info.state);
 
   const auto id = resources_.size();
   resources_.emplace_back(Image{info.type, info.size, info.format}, physical_id, std::move(name));
@@ -27,7 +27,7 @@ fwrk::ResourceID fwrk::Context::import_image(const ImageImportInfo& info, VkImag
 fwrk::ResourceID fwrk::Context::import_buffer(const BufferImportInfo& info, VkBuffer raw, std::string name)
 {
   const auto physical_id = buffers_.size();
-  buffers_.emplace_back(raw, VK_NULL_HANDLE, info.state);
+  buffers_.emplace_back(raw, info.state);
 
   const auto id = resources_.size();
   resources_.emplace_back(Buffer{info.size}, physical_id, std::move(name));
@@ -134,7 +134,7 @@ fwrk::PhysicalImage& fwrk::Context::get_physical_image(const uint64_t id, const 
     case ResourceType::Import:
       return images_.at(id);
     case ResourceType::Transient:
-      return transient_images_.at(current_frame_).at(id);
+      return images_.at(id + current_frame_);
     default:
       throw std::runtime_error("Passed in a proxy into get physical image");
   }
@@ -146,7 +146,7 @@ fwrk::PhysicalBuffer& fwrk::Context::get_physical_buffer(const uint64_t id, cons
     case ResourceType::Import:
       return buffers_.at(id);
     case ResourceType::Transient:
-      return transient_buffers_.at(current_frame_).at(id);
+      return buffers_.at(id + current_frame_);
     default:
       throw std::runtime_error("Passed in a proxy into get physical buffer");
   }
