@@ -1,6 +1,47 @@
 #include <cstdint>
+
+#include "allocator.hpp"
 #include "context.hpp"
 #include "vk_common.hpp"
+
+struct MyAllocator : fwrk::Allocator {
+  std::optional<fwrk::PhysicalImage> create_image(const fwrk::ImageCreateInfo& img_info) override
+  {
+    VkImage image;
+    VmaAllocation allocation;
+
+    VkImageCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+        .imageType = img_info.type,
+        .format = img_info.format,
+        .extent = img_info.size,
+        .mipLevels = img_info.mips,
+        .arrayLayers = img_info.layers,
+        .samples = img_info.samples,
+        .tiling = img_info.tiling,
+        .usage = img_info.usage,
+        .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+        .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+    };
+
+    VmaAllocationCreateInfo alloc_info = {
+        .usage = VMA_MEMORY_USAGE_AUTO,
+    };
+
+    vmaCreateImage(allocator, &create_info, &alloc_info, &image, &allocation, nullptr);
+
+    return fwrk::PhysicalImage{image, allocation, fwrk::PhysicalState::Undefined};
+  }
+  std::optional<fwrk::PhysicalBuffer> create_buffer(const fwrk::BufferCreateInfo&) override { return {}; }
+  void destroy_image(fwrk::PhysicalImage& img) override
+  {
+    vmaDestroyImage(allocator, img.handle, std::any_cast<VmaAllocation>(img.allocation));
+  }
+  void destroy_buffer(fwrk::PhysicalBuffer&) override {}
+
+  VmaAllocator allocator;
+  explicit MyAllocator(VmaAllocator alc) : allocator(alc) {}
+};
 
 int main()
 {
@@ -26,7 +67,8 @@ int main()
 
   {
     // Creating the framework context
-    fwrk::Context context{backend.device, backend.physical_device, frames_in_flight};
+    MyAllocator alloc{backend.allocator};
+    fwrk::Context context{backend.device, frames_in_flight, alloc};
 
     std::vector<fwrk::ResourceID> swapchain_imports(swapchain.images.size());
     fwrk::ResourceID depth_import{};
@@ -103,6 +145,16 @@ int main()
       // --------------------------------
       // Using the framework render graph
       fwrk::Graph& graph = context.graph();
+
+      [[maybe_unused]] auto trans_id = graph.create_image({.type = VK_IMAGE_TYPE_2D,
+                                                           .size = {.width = 1920, .height = 1080, .depth = 1},
+                                                           .format = VK_FORMAT_R8G8B8A8_UNORM,
+                                                           .flags = 0u,
+                                                           .mips = 1,
+                                                           .layers = 1,
+                                                           .samples = VK_SAMPLE_COUNT_1_BIT,
+                                                           .tiling = VK_IMAGE_TILING_LINEAR,
+                                                           .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT});
 
       graph.add_graphics_pass("RenderPass")
           .set_color_attachment({.resource = {swapchain_proxy},

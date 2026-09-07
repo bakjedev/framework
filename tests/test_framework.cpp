@@ -1,9 +1,17 @@
 #include <gtest/gtest.h>
 #include "context.hpp"
 
+struct MyAllocator : fwrk::Allocator {
+  std::optional<fwrk::PhysicalImage> create_image(const fwrk::ImageCreateInfo&) override { return {}; }
+  std::optional<fwrk::PhysicalBuffer> create_buffer(const fwrk::BufferCreateInfo&) override { return {}; }
+  void destroy_image(fwrk::PhysicalImage&) override {}
+  void destroy_buffer(fwrk::PhysicalBuffer&) override {}
+};
+
 TEST(Framework, SimpleTest)
 {
-  fwrk::Context context{nullptr, nullptr, 1};
+  MyAllocator alloc{};
+  fwrk::Context context{nullptr, 1, alloc};
 
   const auto buf = context.import_buffer({.size = 0, .state = fwrk::PhysicalState::Undefined}, nullptr, "Data");
 
