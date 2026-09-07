@@ -47,11 +47,10 @@ bool fwrk::Graph::compile()
   sorted_pass_ids_.clear();
   compiled_end_image_states_.clear();
   compiled_end_buffer_states_.clear();
-  transients_.clear();
+  delete_transients();
 
   compiled_end_image_states_ = end_image_states_;
   compiled_end_buffer_states_ = end_buffer_states_;
-
 
   size_t pass_count = passes_.size();
 
@@ -248,6 +247,32 @@ bool fwrk::Graph::compile()
     }
   }
 
+
+  for (auto& [desc, name]: transient_infos_) {
+    if (std::holds_alternative<ImageCreateInfo>(desc)) {
+      auto& info = std::get<ImageCreateInfo>(desc);
+      const auto physical_id = context_->phys_images_.size();
+      for (uint32_t i = 0; i < context_->frames_in_flight_; i++) {
+        std::optional<PhysicalImage> physical = context_->alloc_.create_image(info);
+        context_->phys_images_.push_back(std::move(*physical));
+      }
+      transients_.emplace_back(Image{info.type, info.size, info.format}, physical_id, std::move(name));
+    } else if (std::holds_alternative<BufferCreateInfo>(desc)) {
+      auto& info = std::get<BufferCreateInfo>(desc);
+      const auto physical_id = context_->phys_buffers_.size();
+      for (uint32_t i = 0; i < context_->frames_in_flight_; i++) {
+        std::optional<PhysicalBuffer> physical = context_->alloc_.create_buffer(info);
+        context_->phys_buffers_.push_back(std::move(*physical));
+      }
+      transients_.emplace_back(Buffer{info.size}, physical_id, std::move(name));
+    }
+  }
+
+  return true;
+}
+
+void fwrk::Graph::execute(VkCommandBuffer cmd)
+{
   // -------------------
   // Reset supplied data
   // -------------------
@@ -257,11 +282,6 @@ bool fwrk::Graph::compile()
   end_buffer_states_.clear();
   transient_infos_.clear();
 
-  return true;
-}
-
-void fwrk::Graph::execute(VkCommandBuffer cmd)
-{
   if (!cmd) return;
   for (const CompiledPass& pass: compiled_passes_) {
     // ---------------------
@@ -508,6 +528,22 @@ fwrk::Resource& fwrk::Graph::get_resource(const ResourceID id)
     default:
       throw std::runtime_error("Passed in a proxy into get resource");
   }
+}
+
+void fwrk::Graph::delete_transients()
+{
+  for (Resource& transient: transients_) {
+    if (std::holds_alternative<Image>(transient.desc)) {
+      for (uint32_t i = 0; i < context_->frames_in_flight_; i++) {
+        context_->alloc_.destroy_image(context_->phys_images_.at(transient.physical_id + i));
+      }
+    } else if (std::holds_alternative<Buffer>(transient.desc)) {
+      for (uint32_t i = 0; i < context_->frames_in_flight_; i++) {
+        context_->alloc_.destroy_buffer(context_->phys_buffers_.at(transient.physical_id + i));
+      }
+    }
+  }
+  transients_.clear();
 }
 
 VkImageAspectFlags fwrk::Graph::get_aspect_for_format(const VkFormat format)

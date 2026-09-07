@@ -3,7 +3,8 @@
 fwrk::Context::~Context()
 {
   if (device_ == VK_NULL_HANDLE) return;
-  for (auto& image: images_) {
+  graph_.delete_transients();
+  for (auto& image: phys_images_) {
     for (auto [_, view]: image.views) {
       if (view) {
         vkDestroyImageView(device_, view, nullptr);
@@ -15,8 +16,8 @@ fwrk::Context::~Context()
 
 fwrk::ResourceID fwrk::Context::import_image(const ImageImportInfo& info, VkImage raw, std::string name)
 {
-  const auto physical_id = images_.size();
-  images_.emplace_back(raw, info.state);
+  const auto physical_id = phys_images_.size();
+  phys_images_.emplace_back(raw, std::any{}, info.state);
 
   const auto id = resources_.size();
   resources_.emplace_back(Image{info.type, info.size, info.format}, physical_id, std::move(name));
@@ -26,8 +27,8 @@ fwrk::ResourceID fwrk::Context::import_image(const ImageImportInfo& info, VkImag
 
 fwrk::ResourceID fwrk::Context::import_buffer(const BufferImportInfo& info, VkBuffer raw, std::string name)
 {
-  const auto physical_id = buffers_.size();
-  buffers_.emplace_back(raw, info.state);
+  const auto physical_id = phys_buffers_.size();
+  phys_buffers_.emplace_back(raw, std::any{}, info.state);
 
   const auto id = resources_.size();
   resources_.emplace_back(Buffer{info.size}, physical_id, std::move(name));
@@ -41,7 +42,7 @@ void fwrk::Context::update_image(const ResourceID resource, const ImageImportInf
   Resource& res = resources_.at(resource.index());
   if (!std::holds_alternative<Image>(res.desc)) return;
 
-  PhysicalImage& phys = images_.at(res.physical_id);
+  PhysicalImage& phys = phys_images_.at(res.physical_id);
   destroy_views(phys);
 
   auto& [type, size, format] = std::get<Image>(res.desc);
@@ -62,7 +63,7 @@ void fwrk::Context::update_buffer(const ResourceID resource, const BufferImportI
   auto& [size] = std::get<Buffer>(res.desc);
   size = info.size;
 
-  PhysicalBuffer& phys = buffers_.at(res.physical_id);
+  PhysicalBuffer& phys = phys_buffers_.at(res.physical_id);
   phys.state = info.state;
   phys.handle = raw;
 }
@@ -87,7 +88,7 @@ VkImageView fwrk::Context::get_image_view(const ViewKey& key, const Resource& re
 {
   if (device_ == VK_NULL_HANDLE || !std::holds_alternative<Image>(resource.desc)) return VK_NULL_HANDLE;
 
-  PhysicalImage& phys = images_.at(resource.physical_id);
+  PhysicalImage& phys = phys_images_.at(resource.physical_id);
 
   auto it = phys.views.find(key);
   if (it != phys.views.end()) {
@@ -132,9 +133,9 @@ fwrk::PhysicalImage& fwrk::Context::get_physical_image(const uint64_t id, const 
 {
   switch (type) {
     case ResourceType::Import:
-      return images_.at(id);
+      return phys_images_.at(id);
     case ResourceType::Transient:
-      return images_.at(id + current_frame_);
+      return phys_images_.at(id + current_frame_);
     default:
       throw std::runtime_error("Passed in a proxy into get physical image");
   }
@@ -144,9 +145,9 @@ fwrk::PhysicalBuffer& fwrk::Context::get_physical_buffer(const uint64_t id, cons
 {
   switch (type) {
     case ResourceType::Import:
-      return buffers_.at(id);
+      return phys_buffers_.at(id);
     case ResourceType::Transient:
-      return buffers_.at(id + current_frame_);
+      return phys_buffers_.at(id + current_frame_);
     default:
       throw std::runtime_error("Passed in a proxy into get physical buffer");
   }

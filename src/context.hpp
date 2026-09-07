@@ -3,14 +3,15 @@
 #include <vector>
 #include <vulkan/vulkan.h>
 
+#include "allocator.hpp"
 #include "graph.hpp"
 #include "types/resource.hpp"
 
 namespace fwrk {
   class Context {
   public:
-    explicit Context(VkDevice device, VkPhysicalDevice physical_device, const uint32_t frames_in_flight) :
-        device_(device), physical_device_(physical_device), frames_in_flight_(frames_in_flight)
+    explicit Context(VkDevice device, const uint32_t frames_in_flight, Allocator& alloc) :
+        device_(device), frames_in_flight_(frames_in_flight), alloc_(alloc)
     {
     }
     ~Context();
@@ -46,14 +47,15 @@ namespace fwrk {
     friend Graph;
     std::vector<Resource> resources_;
 
-    std::vector<PhysicalImage> images_;
-    std::vector<PhysicalBuffer> buffers_;
+    std::vector<PhysicalImage> phys_images_;
+    std::vector<PhysicalBuffer> phys_buffers_;
     std::vector<ResourceID> proxies_;
 
     VkDevice device_ = VK_NULL_HANDLE;
-    VkPhysicalDevice physical_device_ = VK_NULL_HANDLE;
     uint32_t frames_in_flight_ = 0;
     uint32_t current_frame_ = 0;
+
+    Allocator& alloc_;
 
     Graph graph_{this};
 

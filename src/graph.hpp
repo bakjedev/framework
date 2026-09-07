@@ -38,6 +38,8 @@ namespace fwrk {
     [[nodiscard]] ResourceID resolve_proxy(ResourceID resource) const;
     [[nodiscard]] Resource& get_resource(ResourceID id);
 
+    void delete_transients();
+
     struct AttachmentResolveInfo {
       ResourceID resource;
       VkResolveModeFlags mode;
