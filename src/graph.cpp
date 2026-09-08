@@ -8,12 +8,12 @@
 
 void fwrk::Graph::set_image_end_state(const ResourceID resource, const PhysicalState& state)
 {
-  end_image_states_.emplace_back(resource, state);
+  end_image_states_[resource] = state;
 }
 
 void fwrk::Graph::set_buffer_end_state(const ResourceID resource, const PhysicalState& state)
 {
-  end_buffer_states_.emplace_back(resource, state);
+  end_buffer_states_[resource] = state;
 }
 
 fwrk::GraphicsPassBuilder fwrk::Graph::add_graphics_pass(std::string name)
@@ -45,12 +45,6 @@ bool fwrk::Graph::compile()
   // -------------------
   compiled_passes_.clear();
   sorted_pass_ids_.clear();
-  compiled_end_image_states_.clear();
-  compiled_end_buffer_states_.clear();
-  delete_transients();
-
-  compiled_end_image_states_ = end_image_states_;
-  compiled_end_buffer_states_ = end_buffer_states_;
 
   size_t pass_count = passes_.size();
 
@@ -247,41 +241,20 @@ bool fwrk::Graph::compile()
     }
   }
 
+  context_->delete_transients();
+  context_->allocate_transients(std::move(transient_infos_));
 
-  for (auto& [desc, name]: transient_infos_) {
-    if (std::holds_alternative<ImageCreateInfo>(desc)) {
-      auto& info = std::get<ImageCreateInfo>(desc);
-      const auto physical_id = context_->phys_images_.size();
-      for (uint32_t i = 0; i < context_->frames_in_flight_; i++) {
-        std::optional<PhysicalImage> physical = context_->alloc_.create_image(info);
-        context_->phys_images_.push_back(std::move(*physical));
-      }
-      transients_.emplace_back(Image{info.type, info.size, info.format}, physical_id, std::move(name));
-    } else if (std::holds_alternative<BufferCreateInfo>(desc)) {
-      auto& info = std::get<BufferCreateInfo>(desc);
-      const auto physical_id = context_->phys_buffers_.size();
-      for (uint32_t i = 0; i < context_->frames_in_flight_; i++) {
-        std::optional<PhysicalBuffer> physical = context_->alloc_.create_buffer(info);
-        context_->phys_buffers_.push_back(std::move(*physical));
-      }
-      transients_.emplace_back(Buffer{info.size}, physical_id, std::move(name));
-    }
-  }
-
-  return true;
-}
-
-void fwrk::Graph::execute(VkCommandBuffer cmd)
-{
   // -------------------
   // Reset supplied data
   // -------------------
   passes_.clear();
   resource_deps_.clear();
-  end_image_states_.clear();
-  end_buffer_states_.clear();
   transient_infos_.clear();
+  return true;
+}
 
+void fwrk::Graph::execute(VkCommandBuffer cmd)
+{
   if (!cmd) return;
   for (const CompiledPass& pass: compiled_passes_) {
     // ---------------------
@@ -289,8 +262,8 @@ void fwrk::Graph::execute(VkCommandBuffer cmd)
     // ---------------------
     std::vector<VkImageMemoryBarrier2> image_barriers;
     for (const auto& img_barr: pass.deps.image_barriers) {
-      const ResourceID resolved = resolve_proxy(img_barr.resource);
-      const Resource& resource = get_resource(resolved);
+      const ResourceID resolved = context_->resolve_proxy(img_barr.resource);
+      const Resource& resource = context_->get_resource(resolved);
       PhysicalImage& image = context_->get_physical_image(resource.physical_id, resolved.type());
 
       if (image.state != img_barr.dst_state) {
@@ -322,8 +295,8 @@ void fwrk::Graph::execute(VkCommandBuffer cmd)
     // ----------------------
     std::vector<VkBufferMemoryBarrier2> buffer_barriers;
     for (const auto& buf_barr: pass.deps.buffer_barriers) {
-      const ResourceID resolved = resolve_proxy(buf_barr.resource);
-      const Resource& resource = get_resource(resolved);
+      const ResourceID resolved = context_->resolve_proxy(buf_barr.resource);
+      const Resource& resource = context_->get_resource(resolved);
       PhysicalBuffer& buffer = context_->get_physical_buffer(resource.physical_id, resolved.type());
 
       if (buffer.state != buf_barr.dst_state) {
@@ -365,7 +338,7 @@ void fwrk::Graph::execute(VkCommandBuffer cmd)
       VkExtent2D extent{UINT32_MAX, UINT32_MAX};
 
       for (auto& att: pass.render->color_atts) {
-        const Resource& resource = get_resource(resolve_proxy(att.resource));
+        const Resource& resource = context_->get_resource(context_->resolve_proxy(att.resource));
         if (std::holds_alternative<Image>(resource.desc)) {
           const auto& image = std::get<Image>(resource.desc);
 
@@ -374,7 +347,7 @@ void fwrk::Graph::execute(VkCommandBuffer cmd)
           info.imageView = context_->get_image_view({att.subresource, att.view_type}, resource);
           info.imageLayout = att.layout;
           if (att.resolve) {
-            const Resource& resolve_resource = get_resource(resolve_proxy(att.resolve->resource));
+            const Resource& resolve_resource = context_->get_resource(context_->resolve_proxy(att.resolve->resource));
             info.resolveImageView =
                 context_->get_image_view({att.resolve->subresource, att.view_type}, resolve_resource);
             info.resolveMode = static_cast<VkResolveModeFlagBits>(att.resolve->mode);
@@ -393,7 +366,7 @@ void fwrk::Graph::execute(VkCommandBuffer cmd)
 
       if (pass.render->depth_att) {
         const RenderingAttachmentInfo& att = *pass.render->depth_att;
-        const Resource& resource = get_resource(resolve_proxy(att.resource));
+        const Resource& resource = context_->get_resource(context_->resolve_proxy(att.resource));
         if (std::holds_alternative<Image>(resource.desc)) {
           const auto& image = std::get<Image>(resource.desc);
 
@@ -402,7 +375,7 @@ void fwrk::Graph::execute(VkCommandBuffer cmd)
           info.imageView = context_->get_image_view({att.subresource, att.view_type}, resource);
           info.imageLayout = att.layout;
           if (att.resolve) {
-            const Resource& resolve_resource = get_resource(resolve_proxy(att.resolve->resource));
+            const Resource& resolve_resource = context_->get_resource(context_->resolve_proxy(att.resolve->resource));
             info.resolveImageView =
                 context_->get_image_view({att.resolve->subresource, att.view_type}, resolve_resource);
             info.resolveMode = static_cast<VkResolveModeFlagBits>(att.resolve->mode);
@@ -438,9 +411,9 @@ void fwrk::Graph::execute(VkCommandBuffer cmd)
   // Create end image barriers
   // --------------------------
   std::vector<VkImageMemoryBarrier2> end_image_barriers;
-  for (const auto& [id, state]: compiled_end_image_states_) {
-    const ResourceID resolved = resolve_proxy(id);
-    const Resource& resource = get_resource(resolved);
+  for (const auto& [id, state]: end_image_states_) {
+    const ResourceID resolved = context_->resolve_proxy(id);
+    const Resource& resource = context_->get_resource(resolved);
     if (!std::holds_alternative<Image>(resource.desc)) continue;
 
     PhysicalImage& physical = context_->get_physical_image(resource.physical_id, resolved.type());
@@ -468,9 +441,9 @@ void fwrk::Graph::execute(VkCommandBuffer cmd)
   // Create end buffer barriers
   // --------------------------
   std::vector<VkBufferMemoryBarrier2> end_buffer_barriers;
-  for (const auto& [id, state]: compiled_end_buffer_states_) {
-    const ResourceID resolved = resolve_proxy(id);
-    const Resource& resource = get_resource(resolved);
+  for (const auto& [id, state]: end_buffer_states_) {
+    const ResourceID resolved = context_->resolve_proxy(id);
+    const Resource& resource = context_->get_resource(resolved);
     if (!std::holds_alternative<Buffer>(resource.desc)) continue;
 
     PhysicalBuffer& physical = context_->get_physical_buffer(resource.physical_id, resolved.type());
@@ -508,42 +481,6 @@ void fwrk::Graph::execute(VkCommandBuffer cmd)
   // Execute end states
   // ------------------
   vkCmdPipelineBarrier2(cmd, &end_dep_info);
-}
-fwrk::ResourceID fwrk::Graph::resolve_proxy(ResourceID resource) const
-{
-  assert(resource && "Invalid resource ID for resolving proxy");
-  if (resource.type() == ResourceType::Proxy) {
-    return context_->proxies_.at(resource.index());
-  }
-  return resource;
-}
-
-fwrk::Resource& fwrk::Graph::get_resource(const ResourceID id)
-{
-  switch (id.type()) {
-    case ResourceType::Import:
-      return context_->resources_.at(id.index());
-    case ResourceType::Transient:
-      return transients_.at(id.index());
-    default:
-      throw std::runtime_error("Passed in a proxy into get resource");
-  }
-}
-
-void fwrk::Graph::delete_transients()
-{
-  for (Resource& transient: transients_) {
-    if (std::holds_alternative<Image>(transient.desc)) {
-      for (uint32_t i = 0; i < context_->frames_in_flight_; i++) {
-        context_->alloc_.destroy_image(context_->phys_images_.at(transient.physical_id + i));
-      }
-    } else if (std::holds_alternative<Buffer>(transient.desc)) {
-      for (uint32_t i = 0; i < context_->frames_in_flight_; i++) {
-        context_->alloc_.destroy_buffer(context_->phys_buffers_.at(transient.physical_id + i));
-      }
-    }
-  }
-  transients_.clear();
 }
 
 VkImageAspectFlags fwrk::Graph::get_aspect_for_format(const VkFormat format)

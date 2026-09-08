@@ -3,8 +3,8 @@
 template<fwrk::ImageInterface I>
 fwrk::ResourceID fwrk::Context::import_image(const I& image, const PhysicalState& state, std::string name)
 {
-  const auto physical_id = phys_images_.size();
-  phys_images_.emplace_back(image.image(), std::any{}, state);
+  const auto physical_id = images_.size();
+  images_.emplace_back(image.image(), state);
 
   const auto id = resources_.size();
   resources_.emplace_back(Image{image.type(), image.size(), image.format()}, physical_id, std::move(name));
@@ -15,8 +15,8 @@ fwrk::ResourceID fwrk::Context::import_image(const I& image, const PhysicalState
 template<fwrk::BufferInterface I>
 fwrk::ResourceID fwrk::Context::import_buffer(const I& buffer, const PhysicalState& state, std::string name)
 {
-  const auto physical_id = phys_buffers_.size();
-  phys_buffers_.emplace_back(buffer.buffer(), std::any{}, state);
+  const auto physical_id = buffers_.size();
+  buffers_.emplace_back(buffer.buffer(), state);
 
   const auto id = resources_.size();
   resources_.emplace_back(Buffer{buffer.size()}, physical_id, std::move(name));
@@ -31,7 +31,7 @@ void fwrk::Context::update_image(const ResourceID resource, const I& image, cons
   Resource& res = resources_.at(resource.index());
   if (!std::holds_alternative<Image>(res.desc)) return;
 
-  PhysicalImage& phys = phys_images_.at(res.physical_id);
+  PhysicalImage& phys = images_.at(res.physical_id);
   destroy_views(phys);
 
   auto& [type, size, format] = std::get<Image>(res.desc);
@@ -53,7 +53,7 @@ void fwrk::Context::update_buffer(const ResourceID resource, const I& buffer, co
   auto& [size] = std::get<Buffer>(res.desc);
   size = buffer.size();
 
-  PhysicalBuffer& phys = phys_buffers_.at(res.physical_id);
+  PhysicalBuffer& phys = buffers_.at(res.physical_id);
   phys.state = state;
   phys.handle = buffer.buffer();
 }

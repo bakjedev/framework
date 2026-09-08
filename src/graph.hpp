@@ -35,11 +35,6 @@ namespace fwrk {
 
     explicit Graph(Context* context) : context_(context) {}
 
-    [[nodiscard]] ResourceID resolve_proxy(ResourceID resource) const;
-    [[nodiscard]] Resource& get_resource(ResourceID id);
-
-    void delete_transients();
-
     struct AttachmentResolveInfo {
       ResourceID resource;
       VkResolveModeFlags mode;
@@ -101,13 +96,10 @@ namespace fwrk {
     std::vector<uint32_t> sorted_pass_ids_;
     std::vector<CompiledPass> compiled_passes_;
 
-    std::vector<std::pair<ResourceID, PhysicalState>> end_image_states_;
-    std::vector<std::pair<ResourceID, PhysicalState>> end_buffer_states_;
-    std::vector<std::pair<ResourceID, PhysicalState>> compiled_end_image_states_;
-    std::vector<std::pair<ResourceID, PhysicalState>> compiled_end_buffer_states_;
+    flat_hash_map<ResourceID, PhysicalState> end_image_states_;
+    flat_hash_map<ResourceID, PhysicalState> end_buffer_states_;
 
     std::vector<TransientInfo> transient_infos_;
-    std::vector<Resource> transients_;
 
     Context* context_;
 

@@ -1,5 +1,4 @@
 #pragma once
-#include <any>
 #include <vulkan/vulkan.h>
 
 #include "physical_state.hpp"
@@ -46,7 +45,6 @@ namespace fwrk {
 
   struct PhysicalImage {
     VkImage handle;
-    std::any allocation;
     PhysicalState state;
     flat_hash_map<ViewKey, VkImageView, ViewKeyHasher> views;
   };

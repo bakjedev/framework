@@ -1,5 +1,4 @@
 #pragma once
-#include <any>
 #include <concepts>
 #include <vulkan/vulkan.h>
 
@@ -12,7 +11,6 @@ namespace fwrk {
 
   struct PhysicalBuffer {
     VkBuffer handle;
-    std::any allocation;
     PhysicalState state;
   };
 

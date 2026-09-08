@@ -30,14 +30,17 @@ struct MyAllocator : fwrk::Allocator {
 
     vmaCreateImage(allocator, &create_info, &alloc_info, &image, &allocation, nullptr);
 
-    return fwrk::PhysicalImage{image, allocation, fwrk::PhysicalState::Undefined};
+    image_to_allocation[image] = allocation;
+    return fwrk::PhysicalImage{image, fwrk::PhysicalState::Undefined};
   }
   std::optional<fwrk::PhysicalBuffer> create_buffer(const fwrk::BufferCreateInfo&) override { return {}; }
   void destroy_image(fwrk::PhysicalImage& img) override
   {
-    vmaDestroyImage(allocator, img.handle, std::any_cast<VmaAllocation>(img.allocation));
+    vmaDestroyImage(allocator, img.handle, image_to_allocation[img.handle]);
   }
   void destroy_buffer(fwrk::PhysicalBuffer&) override {}
+
+  fwrk::flat_hash_map<VkImage, VmaAllocation> image_to_allocation;
 
   VmaAllocator allocator;
   explicit MyAllocator(VmaAllocator alc) : allocator(alc) {}

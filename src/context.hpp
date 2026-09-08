@@ -46,10 +46,14 @@ namespace fwrk {
   private:
     friend Graph;
     std::vector<Resource> resources_;
-
-    std::vector<PhysicalImage> phys_images_;
-    std::vector<PhysicalBuffer> phys_buffers_;
+    std::vector<Resource> transients_;
     std::vector<ResourceID> proxies_;
+
+    std::vector<PhysicalImage> images_;
+    std::vector<PhysicalBuffer> buffers_;
+
+    std::vector<PhysicalImage> transient_images_;
+    std::vector<PhysicalBuffer> transient_buffers_;
 
     VkDevice device_ = VK_NULL_HANDLE;
     uint32_t frames_in_flight_ = 0;
@@ -59,8 +63,14 @@ namespace fwrk {
 
     Graph graph_{this};
 
+    void allocate_transients(std::vector<Graph::TransientInfo> infos);
+    void delete_transients();
+
     [[nodiscard]] VkImageView get_image_view(const ViewKey& key, const Resource& resource);
     void destroy_views(PhysicalImage& image) const;
+
+    [[nodiscard]] ResourceID resolve_proxy(ResourceID resource) const;
+    [[nodiscard]] Resource& get_resource(ResourceID id);
 
     [[nodiscard]] PhysicalImage& get_physical_image(uint64_t id, ResourceType type);
     [[nodiscard]] PhysicalBuffer& get_physical_buffer(uint64_t id, ResourceType type);
