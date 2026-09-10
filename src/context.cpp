@@ -94,6 +94,32 @@ void fwrk::Context::update_proxy(const ResourceID proxy, const ResourceID resour
   proxies_.at(proxy.index()) = resource;
 }
 
+std::vector<VkImageView> fwrk::Context::get_image_views(const ResourceID resource)
+{
+  std::vector<VkImageView> result;
+  const Resource& res = get_resource(resource);
+  assert(std::holds_alternative<Image>(res.desc) && "Passed a buffer into get image views");
+  const auto& views = get_physical_image(res.physical_id, resource.type()).views;
+  for (const auto& [_, view]: views) {
+    result.push_back(view);
+  }
+  return result;
+}
+
+std::optional<VkImageView> fwrk::Context::get_first_image_view(ResourceID resource)
+{
+  const auto& views = get_image_views(resource);
+  if (views.empty()) return std::nullopt;
+  return views.at(0);
+}
+
+VkBuffer fwrk::Context::get_raw_buffer(const ResourceID resource)
+{
+  const Resource& res = get_resource(resource);
+  assert(std::holds_alternative<Buffer>(res.desc) && "Passed an image into get raw buffer");
+  return get_physical_buffer(res.physical_id, resource.type()).handle;
+}
+
 void fwrk::Context::allocate_transients(std::vector<Graph::TransientInfo> infos)
 {
   for (auto& [desc, name]: infos) {

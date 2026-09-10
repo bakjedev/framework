@@ -38,6 +38,14 @@ fwrk::ResourceID fwrk::Graph::create_image(const ImageCreateInfo& info, std::str
   return ResourceID{ResourceType::Transient, id};
 }
 
+fwrk::ResourceID fwrk::Graph::create_buffer(const BufferCreateInfo& info, std::string name)
+{
+  const auto id = transient_infos_.size();
+  transient_infos_.emplace_back(info, std::move(name));
+
+  return ResourceID{ResourceType::Transient, id};
+}
+
 bool fwrk::Graph::compile()
 {
   // -------------------

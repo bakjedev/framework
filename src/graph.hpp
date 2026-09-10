@@ -22,6 +22,7 @@ namespace fwrk {
     [[nodiscard]] ComputePassBuilder add_compute_pass(std::string name = "Unnamed compute pass");
 
     [[nodiscard]] ResourceID create_image(const ImageCreateInfo& info, std::string name = "Unnamed transient image");
+    [[nodiscard]] ResourceID create_buffer(const BufferCreateInfo& info, std::string name = "Unnamed transient buffer");
 
     bool compile();
 

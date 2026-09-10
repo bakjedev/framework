@@ -41,6 +41,10 @@ namespace fwrk {
     [[nodiscard]] ResourceID create_proxy(ResourceID resource = {});
     void update_proxy(ResourceID proxy, ResourceID resource);
 
+    [[nodiscard]] std::vector<VkImageView> get_image_views(ResourceID resource);
+    [[nodiscard]] std::optional<VkImageView> get_first_image_view(ResourceID resource);
+    [[nodiscard]] VkBuffer get_raw_buffer(ResourceID resource);
+
     [[nodiscard]] Graph& graph() { return graph_; }
 
   private:
