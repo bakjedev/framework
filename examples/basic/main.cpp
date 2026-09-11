@@ -1,7 +1,6 @@
 #include <cstdint>
 
-#include "allocator.hpp"
-#include "context.hpp"
+#include "framework/context.hpp"
 #include "vk_common.hpp"
 
 struct MyAllocator : fwrk::Allocator {

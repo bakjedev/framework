@@ -5,8 +5,8 @@
 #include <variant>
 
 #include "buffer_resource.hpp"
+#include "framework/util/flat_hash_map.hpp"
 #include "image_resource.hpp"
-#include "util/flat_hash_map.hpp"
 
 namespace fwrk {
   enum class ResourceType : uint64_t { Import = 0, Transient = 1, Proxy = 2 };

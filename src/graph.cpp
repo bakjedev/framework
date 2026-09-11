@@ -1,10 +1,9 @@
-#include "graph.hpp"
+#include "framework/graph.hpp"
 #include <algorithm>
 #include <cassert>
 #include <deque>
-#include <iostream>
-#include "context.hpp"
-#include "types/pass.hpp"
+#include "framework/context.hpp"
+#include "framework/types/pass.hpp"
 
 void fwrk::Graph::set_image_end_state(const ResourceID resource, const PhysicalState& state)
 {

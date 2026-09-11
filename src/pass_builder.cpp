@@ -1,9 +1,9 @@
-#include "pass_builder.hpp"
+#include "framework/pass_builder.hpp"
 
 #include <cassert>
 
-#include "graph.hpp"
-#include "types/pass.hpp"
+#include "framework/graph.hpp"
+#include "framework/types/pass.hpp"
 
 fwrk::GraphicsPassBuilder& fwrk::GraphicsPassBuilder::set_color_attachment(const AttachmentInfo& info)
 {

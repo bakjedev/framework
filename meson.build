@@ -2,7 +2,6 @@ project('framework', 'cpp', version : '1.0', meson_version : '>=1.1.0',
         default_options : [
             'cpp_std=c++20',
             'warning_level=3',
-            'werror=true',
             'buildtype=debugoptimized'
         ]
 )
@@ -38,22 +37,27 @@ sources = files(
     'src/pass_builder.cpp'
 )
 
-vulkan_dep = dependency('vulkan', include_type : 'system')
-subdir('vendor/vma')
+public_inc = include_directories('include')
 
-framework_lib = library('framework-lib', sources, include_directories : include_directories('src'), dependencies : [vulkan_dep])
+vulkan_dep = dependency('vulkan', include_type : 'system')
+
+framework_lib = library('framework-lib', sources, include_directories : public_inc, dependencies : [vulkan_dep])
 framework_dep = declare_dependency(
     link_with : framework_lib,
-    include_directories : include_directories('src'),
+    include_directories : public_inc,
     dependencies : [vulkan_dep]
 )
 
-gtest_dep = dependency('gtest', main : true, required : false)
+meson.override_dependency('framework', framework_dep)
 
-if gtest_dep.found()
-    tests_exe = executable('framework-tests', 'tests/test_framework.cpp', dependencies : [gtest_dep, framework_dep])
-    test('unit', tests_exe, protocol : 'gtest')
+if not meson.is_subproject()
+    gtest_dep = dependency('gtest', main : true, required : false)
+    if gtest_dep.found()
+        tests_exe = executable('framework-tests', 'tests/test_framework.cpp', dependencies : [gtest_dep, framework_dep])
+        test('unit', tests_exe, protocol : 'gtest')
+    endif
+
+    # examples
+    subdir('vendor/vma')
+    subdir('examples/basic')
 endif
-
-# examples
-subdir('examples/basic')

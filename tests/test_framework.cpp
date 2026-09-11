@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include "context.hpp"
+#include "framework/context.hpp"
 
 struct MyAllocator : fwrk::Allocator {
   std::optional<fwrk::PhysicalImage> create_image(const fwrk::ImageCreateInfo&) override { return {}; }
