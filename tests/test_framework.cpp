@@ -41,5 +41,5 @@ TEST(Framework, SimpleTest)
 
   EXPECT_TRUE(graph.compile());
 
-  graph.execute(nullptr);
+  graph.execute(nullptr, 0);
 }

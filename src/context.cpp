@@ -1,4 +1,5 @@
 #include "framework/context.hpp"
+#include <stdexcept>
 
 fwrk::Context::~Context()
 {
@@ -21,7 +22,12 @@ fwrk::Context::~Context()
     image.views.clear();
   }
 
-  delete_transients();
+  for (auto& [transient, _]: deletion_queue_) {
+    destroy_transient(transient);
+  }
+  for (Resource& transient: transients_) {
+    destroy_transient(transient);
+  }
 }
 
 fwrk::ResourceID fwrk::Context::import_image(const ImageImportInfo& info, VkImage raw, std::string name)
@@ -142,22 +148,40 @@ void fwrk::Context::allocate_transients(std::vector<Graph::TransientInfo> infos)
     }
   }
 }
-
-void fwrk::Context::delete_transients()
+void fwrk::Context::schedule_destroy_transients()
 {
-  for (auto& transient: transients_) {
-    if (std::holds_alternative<Image>(transient.desc)) {
-      for (uint32_t i = 0; i < frames_in_flight_; i++) {
-        alloc_.destroy_image(transient_images_.at(transient.physical_id + i));
-      }
-    } else if (std::holds_alternative<Buffer>(transient.desc)) {
-      for (uint32_t i = 0; i < frames_in_flight_; i++) {
-        alloc_.destroy_buffer(transient_buffers_.at(transient.physical_id + i));
-      }
-    }
+  if (transients_.empty()) return;
+  const uint64_t safe_frame = frame_ + frames_in_flight_;
+  for (Resource& transient: transients_) {
+    deletion_queue_.emplace_back(std::move(transient), safe_frame);
   }
   transients_.clear();
 }
+
+void fwrk::Context::destroy_transients(const uint32_t frame_index)
+{
+  auto it = deletion_queue_.begin();
+  for (; it != deletion_queue_.end() && it->second <= frame_; ++it) {
+    destroy_transient(it->first);
+  }
+  deletion_queue_.erase(deletion_queue_.begin(), it);
+  frame_ += 1;
+  frame_index_ = frame_index;
+}
+
+void fwrk::Context::destroy_transient(const Resource& transient)
+{
+  if (std::holds_alternative<Image>(transient.desc)) {
+    for (uint32_t i = 0; i < frames_in_flight_; i++) {
+      alloc_.destroy_image(transient_images_.at(transient.physical_id + i));
+    }
+  } else if (std::holds_alternative<Buffer>(transient.desc)) {
+    for (uint32_t i = 0; i < frames_in_flight_; i++) {
+      alloc_.destroy_buffer(transient_buffers_.at(transient.physical_id + i));
+    }
+  }
+}
+
 
 VkImageView fwrk::Context::get_image_view(const ViewKey& key, const Resource& resource)
 {
@@ -231,7 +255,7 @@ fwrk::PhysicalImage& fwrk::Context::get_physical_image(const uint64_t id, const 
     case ResourceType::Import:
       return images_.at(id);
     case ResourceType::Transient:
-      return transient_images_.at(id + current_frame_);
+      return transient_images_.at(id + frame_index_);
     default:
       throw std::runtime_error("Passed in a proxy into get physical image");
   }
@@ -243,7 +267,7 @@ fwrk::PhysicalBuffer& fwrk::Context::get_physical_buffer(const uint64_t id, cons
     case ResourceType::Import:
       return buffers_.at(id);
     case ResourceType::Transient:
-      return transient_buffers_.at(id + current_frame_);
+      return transient_buffers_.at(id + frame_index_);
     default:
       throw std::runtime_error("Passed in a proxy into get physical buffer");
   }

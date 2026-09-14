@@ -53,6 +53,8 @@ namespace fwrk {
     std::vector<Resource> transients_;
     std::vector<ResourceID> proxies_;
 
+    std::vector<std::pair<Resource, uint64_t>> deletion_queue_;
+
     std::vector<PhysicalImage> images_;
     std::vector<PhysicalBuffer> buffers_;
 
@@ -61,14 +63,17 @@ namespace fwrk {
 
     VkDevice device_ = VK_NULL_HANDLE;
     uint32_t frames_in_flight_ = 0;
-    uint32_t current_frame_ = 0;
+    uint32_t frame_index_ = 0;
+    uint64_t frame_ = 0;
 
     Allocator& alloc_;
 
     Graph graph_{this};
 
     void allocate_transients(std::vector<Graph::TransientInfo> infos);
-    void delete_transients();
+    void schedule_destroy_transients();
+    void destroy_transients(uint32_t frame_index);
+    void destroy_transient(const Resource& transient);
 
     [[nodiscard]] VkImageView get_image_view(const ViewKey& key, const Resource& resource);
     void destroy_views(PhysicalImage& image) const;

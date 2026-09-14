@@ -213,7 +213,7 @@ int main()
 
       context.update_proxy(swapchain_proxy, swapchain_imports[image_index]);
 
-      graph.execute(cmd);
+      graph.execute(cmd, frame);
 
       // --------------------------------
       vkEndCommandBuffer(cmd);

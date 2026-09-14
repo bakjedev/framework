@@ -248,7 +248,7 @@ bool fwrk::Graph::compile()
     }
   }
 
-  context_->delete_transients();
+  context_->schedule_destroy_transients();
   context_->allocate_transients(std::move(transient_infos_));
 
   // -------------------
@@ -260,8 +260,10 @@ bool fwrk::Graph::compile()
   return true;
 }
 
-void fwrk::Graph::execute(VkCommandBuffer cmd)
+void fwrk::Graph::execute(VkCommandBuffer cmd, const uint32_t frame_index)
 {
+  context_->destroy_transients(frame_index);
+
   if (!cmd) return;
   for (const CompiledPass& pass: compiled_passes_) {
     // ---------------------

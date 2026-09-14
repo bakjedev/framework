@@ -26,7 +26,7 @@ namespace fwrk {
 
     bool compile();
 
-    void execute(VkCommandBuffer cmd);
+    void execute(VkCommandBuffer cmd, uint32_t frame_index);
 
   private:
     friend Context;
