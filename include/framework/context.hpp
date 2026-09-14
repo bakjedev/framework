@@ -53,7 +53,7 @@ namespace fwrk {
     std::vector<Resource> transients_;
     std::vector<ResourceID> proxies_;
 
-    std::vector<std::pair<Resource, uint64_t>> deletion_queue_;
+    std::vector<std::pair<uint64_t, std::vector<Resource>>> deletion_queue_;
 
     std::vector<PhysicalImage> images_;
     std::vector<PhysicalBuffer> buffers_;
