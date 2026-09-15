@@ -29,5 +29,7 @@ namespace fwrk {
 
   struct BufferCreateInfo {
     VkDeviceSize size;
+    VkBufferCreateFlags flags;
+    VkBufferUsageFlags usage;
   };
 } // namespace fwrk
