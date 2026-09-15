@@ -47,6 +47,8 @@ namespace fwrk {
     VkImage handle;
     PhysicalState state;
     flat_hash_map<ViewKey, VkImageView, ViewKeyHasher> views;
+
+    PhysicalImage(VkImage h, PhysicalState s) : handle(h), state(s) {}
   };
 
   template<typename T>

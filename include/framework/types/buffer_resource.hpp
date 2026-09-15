@@ -12,6 +12,8 @@ namespace fwrk {
   struct PhysicalBuffer {
     VkBuffer handle;
     PhysicalState state;
+
+    PhysicalBuffer(VkBuffer h, PhysicalState s) : handle(h), state(s) {}
   };
 
   template<typename T>
