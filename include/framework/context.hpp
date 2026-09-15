@@ -14,6 +14,7 @@ namespace fwrk {
         device_(device), frames_in_flight_(frames_in_flight), alloc_(alloc)
     {
     }
+    Context(VkDevice, uint32_t, Allocator&&) = delete;
     ~Context();
 
     [[nodiscard]] ResourceID import_image(const ImageImportInfo& info, VkImage raw, std::string name = "Unnamed image");
