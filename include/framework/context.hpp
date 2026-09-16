@@ -44,6 +44,7 @@ namespace fwrk {
 
     [[nodiscard]] std::vector<VkImageView> get_image_views(ResourceID resource);
     [[nodiscard]] std::optional<VkImageView> get_first_image_view(ResourceID resource);
+    [[nodiscard]] VkImage get_raw_image(ResourceID resource);
     [[nodiscard]] VkBuffer get_raw_buffer(ResourceID resource);
 
     [[nodiscard]] Graph& graph() { return graph_; }

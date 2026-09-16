@@ -121,6 +121,13 @@ std::optional<VkImageView> fwrk::Context::get_first_image_view(ResourceID resour
   return views.at(0);
 }
 
+VkImage fwrk::Context::get_raw_image(const ResourceID resource)
+{
+  const Resource& res = get_resource(resource);
+  assert(std::holds_alternative<Image>(res.desc) && "Passed a buffer into get raw image");
+  return get_physical_image(res.physical_id, resource.type()).handle;
+}
+
 VkBuffer fwrk::Context::get_raw_buffer(const ResourceID resource)
 {
   const Resource& res = get_resource(resource);
