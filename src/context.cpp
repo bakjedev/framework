@@ -103,7 +103,7 @@ void fwrk::Context::update_proxy(const ResourceID proxy, const ResourceID resour
 }
 
 VkImageView fwrk::Context::acquire_image_view(const ResourceID resource, const ViewKey& view_key,
-                                              const uint32_t frame_index)
+                                              const std::optional<uint32_t> frame_index)
 {
   const Resource& res = get_resource(resource);
   assert(std::holds_alternative<Image>(res.desc) && "Passed a buffer into get image view");
@@ -132,11 +132,11 @@ std::optional<VkImageView> fwrk::Context::get_first_image_view(ResourceID resour
   return views.at(0);
 }
 
-VkImage fwrk::Context::get_raw_image(const ResourceID resource)
+VkImage fwrk::Context::get_raw_image(const ResourceID resource, const std::optional<uint32_t> frame_index)
 {
   const Resource& res = get_resource(resource);
   assert(std::holds_alternative<Image>(res.desc) && "Passed a buffer into get raw image");
-  return get_physical_image(res.physical_id, resource.type()).handle;
+  return get_physical_image(res.physical_id, resource.type(), frame_index).handle;
 }
 
 VkBuffer fwrk::Context::get_raw_buffer(const ResourceID resource)
