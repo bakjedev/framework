@@ -102,6 +102,17 @@ void fwrk::Context::update_proxy(const ResourceID proxy, const ResourceID resour
   proxies_.at(proxy.index()) = resource;
 }
 
+VkImageView fwrk::Context::acquire_image_view(const ResourceID resource, const ViewKey& view_key,
+                                              const uint32_t frame_index)
+{
+  const Resource& res = get_resource(resource);
+  assert(std::holds_alternative<Image>(res.desc) && "Passed a buffer into get image view");
+  auto& physical = get_physical_image(res.physical_id, resource.type(), frame_index);
+  const auto& image = std::get<Image>(res.desc);
+  auto image_view = get_image_view(view_key, image, physical);
+  return image_view;
+}
+
 std::vector<VkImageView> fwrk::Context::get_image_views(const ResourceID resource)
 {
   std::vector<VkImageView> result;
@@ -192,11 +203,10 @@ void fwrk::Context::destroy_transient(const Resource& transient)
 }
 
 
-VkImageView fwrk::Context::get_image_view(const ViewKey& key, const Resource& resource)
+VkImageView fwrk::Context::get_image_view(const ViewKey& key, const Image& image, PhysicalImage& phys) const
 {
-  if (device_ == VK_NULL_HANDLE || !std::holds_alternative<Image>(resource.desc)) return VK_NULL_HANDLE;
+  if (device_ == VK_NULL_HANDLE) return VK_NULL_HANDLE;
 
-  PhysicalImage& phys = images_.at(resource.physical_id);
 
   auto it = phys.views.find(key);
   if (it != phys.views.end()) {
@@ -208,7 +218,7 @@ VkImageView fwrk::Context::get_image_view(const ViewKey& key, const Resource& re
                                                .flags = 0u,
                                                .image = phys.handle,
                                                .viewType = key.view_type,
-                                               .format = std::get<Image>(resource.desc).format,
+                                               .format = image.format,
                                                .components = {},
                                                .subresourceRange = {.aspectMask = key.aspect,
                                                                     .baseMipLevel = key.base_level,
@@ -258,13 +268,14 @@ fwrk::Resource& fwrk::Context::get_resource(const ResourceID id)
   }
 }
 
-fwrk::PhysicalImage& fwrk::Context::get_physical_image(const uint64_t id, const ResourceType type)
+fwrk::PhysicalImage& fwrk::Context::get_physical_image(const uint64_t id, const ResourceType type,
+                                                       const std::optional<uint32_t> frame_index)
 {
   switch (type) {
     case ResourceType::Import:
       return images_.at(id);
     case ResourceType::Transient:
-      return transient_images_.at(id + frame_index_);
+      return transient_images_.at(id + frame_index.value_or(frame_index_));
     default:
       throw std::runtime_error("Passed in a proxy into get physical image");
   }

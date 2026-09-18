@@ -347,18 +347,24 @@ void fwrk::Graph::execute(VkCommandBuffer cmd, const uint32_t frame_index)
       VkExtent2D extent{UINT32_MAX, UINT32_MAX};
 
       for (auto& att: pass.render->color_atts) {
-        const Resource& resource = context_->get_resource(context_->resolve_proxy(att.resource));
+        const ResourceID resolved_resource_id = context_->resolve_proxy(att.resource);
+        const Resource& resource = context_->get_resource(resolved_resource_id);
         if (std::holds_alternative<Image>(resource.desc)) {
           const auto& image = std::get<Image>(resource.desc);
+          PhysicalImage& physical = context_->get_physical_image(resource.physical_id, resolved_resource_id.type());
 
           VkRenderingAttachmentInfo info{};
           info.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-          info.imageView = context_->get_image_view({att.subresource, att.view_type}, resource);
+          info.imageView = context_->get_image_view({att.subresource, att.view_type}, image, physical);
           info.imageLayout = att.layout;
           if (att.resolve) {
-            const Resource& resolve_resource = context_->get_resource(context_->resolve_proxy(att.resolve->resource));
-            info.resolveImageView =
-                context_->get_image_view({att.resolve->subresource, att.view_type}, resolve_resource);
+            const ResourceID resolved_resolve_resource_id = context_->resolve_proxy(att.resolve->resource);
+            const Resource& resolve_resource = context_->get_resource(resolved_resolve_resource_id);
+            PhysicalImage& resolve_physical =
+                context_->get_physical_image(resolve_resource.physical_id, resolved_resolve_resource_id.type());
+
+            info.resolveImageView = context_->get_image_view({att.resolve->subresource, att.view_type},
+                                                             std::get<Image>(resolve_resource.desc), resolve_physical);
             info.resolveMode = static_cast<VkResolveModeFlagBits>(att.resolve->mode);
             info.resolveImageLayout = att.layout;
           }
@@ -375,18 +381,23 @@ void fwrk::Graph::execute(VkCommandBuffer cmd, const uint32_t frame_index)
 
       if (pass.render->depth_att) {
         const RenderingAttachmentInfo& att = *pass.render->depth_att;
-        const Resource& resource = context_->get_resource(context_->resolve_proxy(att.resource));
+        const ResourceID resolved_resource_id = context_->resolve_proxy(att.resource);
+        const Resource& resource = context_->get_resource(resolved_resource_id);
         if (std::holds_alternative<Image>(resource.desc)) {
           const auto& image = std::get<Image>(resource.desc);
+          PhysicalImage& physical = context_->get_physical_image(resource.physical_id, resolved_resource_id.type());
 
           VkRenderingAttachmentInfo& info = depth_attachment.emplace();
           info.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-          info.imageView = context_->get_image_view({att.subresource, att.view_type}, resource);
+          info.imageView = context_->get_image_view({att.subresource, att.view_type}, image, physical);
           info.imageLayout = att.layout;
           if (att.resolve) {
-            const Resource& resolve_resource = context_->get_resource(context_->resolve_proxy(att.resolve->resource));
-            info.resolveImageView =
-                context_->get_image_view({att.resolve->subresource, att.view_type}, resolve_resource);
+            const ResourceID resolved_resolve_resource_id = context_->resolve_proxy(att.resolve->resource);
+            const Resource& resolve_resource = context_->get_resource(resolved_resolve_resource_id);
+            PhysicalImage& resolve_physical =
+                context_->get_physical_image(resolve_resource.physical_id, resolved_resolve_resource_id.type());
+            info.resolveImageView = context_->get_image_view({att.resolve->subresource, att.view_type},
+                                                             std::get<Image>(resolve_resource.desc), resolve_physical);
             info.resolveMode = static_cast<VkResolveModeFlagBits>(att.resolve->mode);
             info.resolveImageLayout = att.layout;
           }

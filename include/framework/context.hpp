@@ -42,6 +42,7 @@ namespace fwrk {
     [[nodiscard]] ResourceID create_proxy(ResourceID resource = {});
     void update_proxy(ResourceID proxy, ResourceID resource);
 
+    [[nodiscard]] VkImageView acquire_image_view(ResourceID resource, const ViewKey& view_key, uint32_t frame_index);
     [[nodiscard]] std::vector<VkImageView> get_image_views(ResourceID resource);
     [[nodiscard]] std::optional<VkImageView> get_first_image_view(ResourceID resource);
     [[nodiscard]] VkImage get_raw_image(ResourceID resource);
@@ -77,13 +78,14 @@ namespace fwrk {
     void destroy_transients(uint32_t frame_index);
     void destroy_transient(const Resource& transient);
 
-    [[nodiscard]] VkImageView get_image_view(const ViewKey& key, const Resource& resource);
+    [[nodiscard]] VkImageView get_image_view(const ViewKey& key, const Image& image, PhysicalImage& phys) const;
     void destroy_views(PhysicalImage& image) const;
 
     [[nodiscard]] ResourceID resolve_proxy(ResourceID resource) const;
     [[nodiscard]] Resource& get_resource(ResourceID id);
 
-    [[nodiscard]] PhysicalImage& get_physical_image(uint64_t id, ResourceType type);
+    [[nodiscard]] PhysicalImage& get_physical_image(uint64_t id, ResourceType type,
+                                                    std::optional<uint32_t> frame_index = std::nullopt);
     [[nodiscard]] PhysicalBuffer& get_physical_buffer(uint64_t id, ResourceType type);
   };
 } // namespace fwrk
