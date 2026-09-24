@@ -47,7 +47,7 @@ namespace fwrk {
     [[nodiscard]] std::vector<VkImageView> get_image_views(ResourceID resource);
     [[nodiscard]] std::optional<VkImageView> get_first_image_view(ResourceID resource);
     [[nodiscard]] VkImage get_raw_image(ResourceID resource, std::optional<uint32_t> frame_index = std::nullopt);
-    [[nodiscard]] VkBuffer get_raw_buffer(ResourceID resource);
+    [[nodiscard]] VkBuffer get_raw_buffer(ResourceID resource, std::optional<uint32_t> frame_index = std::nullopt);
 
     [[nodiscard]] Graph& graph() { return graph_; }
 
@@ -87,7 +87,8 @@ namespace fwrk {
 
     [[nodiscard]] PhysicalImage& get_physical_image(uint64_t id, ResourceType type,
                                                     std::optional<uint32_t> frame_index = std::nullopt);
-    [[nodiscard]] PhysicalBuffer& get_physical_buffer(uint64_t id, ResourceType type);
+    [[nodiscard]] PhysicalBuffer& get_physical_buffer(uint64_t id, ResourceType type,
+                                                      std::optional<uint32_t> frame_index = std::nullopt);
   };
 } // namespace fwrk
 

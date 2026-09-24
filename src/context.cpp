@@ -139,11 +139,11 @@ VkImage fwrk::Context::get_raw_image(const ResourceID resource, const std::optio
   return get_physical_image(res.physical_id, resource.type(), frame_index).handle;
 }
 
-VkBuffer fwrk::Context::get_raw_buffer(const ResourceID resource)
+VkBuffer fwrk::Context::get_raw_buffer(const ResourceID resource, const std::optional<uint32_t> frame_index)
 {
   const Resource& res = get_resource(resource);
   assert(std::holds_alternative<Buffer>(res.desc) && "Passed an image into get raw buffer");
-  return get_physical_buffer(res.physical_id, resource.type()).handle;
+  return get_physical_buffer(res.physical_id, resource.type(), frame_index).handle;
 }
 
 void fwrk::Context::allocate_transients(std::vector<Graph::TransientInfo> infos)
@@ -281,13 +281,14 @@ fwrk::PhysicalImage& fwrk::Context::get_physical_image(const uint64_t id, const 
   }
 }
 
-fwrk::PhysicalBuffer& fwrk::Context::get_physical_buffer(const uint64_t id, const ResourceType type)
+fwrk::PhysicalBuffer& fwrk::Context::get_physical_buffer(const uint64_t id, const ResourceType type,
+                                                         const std::optional<uint32_t> frame_index)
 {
   switch (type) {
     case ResourceType::Import:
       return buffers_.at(id);
     case ResourceType::Transient:
-      return transient_buffers_.at(id + frame_index_);
+      return transient_buffers_.at(id + frame_index.value_or(frame_index_));
     default:
       throw std::runtime_error("Passed in a proxy into get physical buffer");
   }
