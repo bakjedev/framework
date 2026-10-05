@@ -1,6 +1,17 @@
 #include "framework/context.hpp"
 #include <stdexcept>
 
+fwrk::Context::Context(VkInstance instance, VkDevice device, const uint32_t frames_in_flight, Allocator& alloc,
+                       const bool debug_markers) : device_(device), frames_in_flight_(frames_in_flight), alloc_(alloc)
+{
+  if (debug_markers) {
+    begin_debug_pfn_ = reinterpret_cast<PFN_vkCmdBeginDebugUtilsLabelEXT>(
+        vkGetInstanceProcAddr(instance, "vkCmdBeginDebugUtilsLabelEXT"));
+    end_debug_pfn_ =
+        reinterpret_cast<PFN_vkCmdEndDebugUtilsLabelEXT>(vkGetInstanceProcAddr(instance, "vkCmdEndDebugUtilsLabelEXT"));
+  }
+}
+
 fwrk::Context::~Context()
 {
   if (device_ == VK_NULL_HANDLE) return;

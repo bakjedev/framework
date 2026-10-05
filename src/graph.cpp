@@ -185,11 +185,18 @@ bool fwrk::Graph::compile()
 
   for (const uint32_t pass_id: sorted_pass_ids_) {
     Pass& pass = passes_[pass_id];
-    auto& [dependencies, rendering, name, func] = compiled_passes_[pass_id];
+    auto& [dependencies, rendering, debug, name, func] = compiled_passes_[pass_id];
     auto& [image_barriers, buffer_barriers] = dependencies;
 
     name = std::move(pass.name);
     func = std::move(pass.func);
+
+    debug = VkDebugUtilsLabelEXT{
+        .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT,
+        .pNext = nullptr,
+        .pLabelName = name.c_str(),
+        .color = {1.0f, 1.0f, 1.0f, 1.0f},
+    };
 
     // image memory barriers
     for (const ImageAccess& image_access: pass.images) {
@@ -422,10 +429,12 @@ void fwrk::Graph::execute(VkCommandBuffer cmd, const uint32_t frame_index)
     // ------------
     // Execute pass
     // ------------
+    if (context_->begin_debug_pfn_) context_->begin_debug_pfn_(cmd, &pass.debug);
     vkCmdPipelineBarrier2(cmd, &dep_info);
     if (pass.render) vkCmdBeginRendering(cmd, &rendering_info);
     pass.func(cmd);
     if (pass.render) vkCmdEndRendering(cmd);
+    if (context_->end_debug_pfn_) context_->end_debug_pfn_(cmd);
   }
   // --------------------------
   // Create end image barriers

@@ -11,7 +11,7 @@ struct MyAllocator : fwrk::Allocator {
 TEST(Framework, SimpleTest)
 {
   MyAllocator alloc{};
-  fwrk::Context context{nullptr, 1, alloc};
+  fwrk::Context context{nullptr, nullptr, 1, alloc};
 
   const auto buf = context.import_buffer({.size = 0, .state = fwrk::PhysicalState::Undefined}, nullptr, "Data");
 

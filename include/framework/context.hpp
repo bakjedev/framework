@@ -10,10 +10,8 @@
 namespace fwrk {
   class Context {
   public:
-    explicit Context(VkDevice device, const uint32_t frames_in_flight, Allocator& alloc) :
-        device_(device), frames_in_flight_(frames_in_flight), alloc_(alloc)
-    {
-    }
+    Context(VkInstance instance, VkDevice device, uint32_t frames_in_flight, Allocator& alloc,
+            bool debug_markers = false);
     Context(VkDevice, uint32_t, Allocator&&) = delete;
     ~Context();
 
@@ -71,6 +69,9 @@ namespace fwrk {
     uint64_t frame_ = 0;
 
     Allocator& alloc_;
+
+    PFN_vkCmdBeginDebugUtilsLabelEXT begin_debug_pfn_ = nullptr;
+    PFN_vkCmdEndDebugUtilsLabelEXT end_debug_pfn_ = nullptr;
 
     Graph graph_{this};
 

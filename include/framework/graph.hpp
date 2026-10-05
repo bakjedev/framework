@@ -80,6 +80,7 @@ namespace fwrk {
     struct CompiledPass {
       DependencyInfo deps;
       std::optional<RenderingInfo> render;
+      VkDebugUtilsLabelEXT debug;
       std::string name;
       std::function<void(VkCommandBuffer cmd)> func;
     };
