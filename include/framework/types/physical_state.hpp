@@ -22,6 +22,6 @@ namespace fwrk {
     static const PhysicalState Undefined;
     bool operator==(const PhysicalState& other) const = default;
   };
-  constexpr PhysicalState PhysicalState::Undefined{VK_ACCESS_2_NONE, VK_PIPELINE_STAGE_2_NONE,
-                                                   VK_IMAGE_LAYOUT_UNDEFINED};
+  inline constexpr PhysicalState PhysicalState::Undefined{VK_ACCESS_2_NONE, VK_PIPELINE_STAGE_2_NONE,
+                                                          VK_IMAGE_LAYOUT_UNDEFINED};
 } // namespace fwrk
