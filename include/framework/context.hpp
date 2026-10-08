@@ -47,6 +47,8 @@ namespace fwrk {
     [[nodiscard]] VkImage get_raw_image(ResourceID resource, std::optional<uint32_t> frame_index = std::nullopt);
     [[nodiscard]] VkBuffer get_raw_buffer(ResourceID resource, std::optional<uint32_t> frame_index = std::nullopt);
 
+    [[nodiscard]] uint32_t current_frame() const { return frame_index_; }
+
     [[nodiscard]] Graph& graph() { return graph_; }
 
   private:
