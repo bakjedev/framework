@@ -45,16 +45,6 @@ namespace fwrk {
     VkImageAspectFlags aspect = VK_IMAGE_ASPECT_NONE;
   };
 
-  struct StorageImageInfo {
-    ResourceAccess resource;
-    VkPipelineStageFlags2 stages = VK_PIPELINE_STAGE_2_NONE;
-    uint32_t base_level = 0;
-    uint32_t base_layer = 0;
-    uint32_t layer_count = 1;
-    VkImageViewType view_type = VK_IMAGE_VIEW_TYPE_2D;
-    VkImageAspectFlags aspect = VK_IMAGE_ASPECT_NONE;
-  };
-
   struct BufferInfo {
     ResourceAccess resource;
     VkPipelineStageFlags2 stages = VK_PIPELINE_STAGE_2_NONE;
@@ -74,8 +64,8 @@ namespace fwrk {
     T& set_uniform_buffer_read(const BufferInfo& info);
     T& set_storage_buffer_read(const BufferInfo& info);
     T& set_storage_buffer_write(const BufferInfo& info);
-    T& set_storage_image_read(const StorageImageInfo& info);
-    T& set_storage_image_write(const StorageImageInfo& info);
+    T& set_storage_image_read(const ImageInfo& info);
+    T& set_storage_image_write(const ImageInfo& info);
     T& set_image_transfer_src(const ImageInfo& info);
     T& set_image_transfer_dst(const ImageInfo& info);
     T& set_buffer_transfer_src(const BufferInfo& info);

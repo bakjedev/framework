@@ -190,7 +190,7 @@ T& fwrk::PassBuilder<T>::set_storage_buffer_write(const BufferInfo& info)
 }
 
 template<typename T>
-T& fwrk::PassBuilder<T>::set_storage_image_read(const StorageImageInfo& info)
+T& fwrk::PassBuilder<T>::set_storage_image_read(const ImageInfo& info)
 {
   if (!try_access(info.resource.id)) return static_cast<T&>(*this);
   auto& res = graph_->resource_deps_[info.resource.id];
@@ -198,7 +198,7 @@ T& fwrk::PassBuilder<T>::set_storage_image_read(const StorageImageInfo& info)
   set_possible_explicit_read(info.resource.pass, res);
 
   ImageAccess& image = pass_->images.emplace_back(
-      info.resource.id, std::nullopt, info.aspect, info.base_level, 1, info.base_layer, info.layer_count,
+      info.resource.id, std::nullopt, info.aspect, info.base_level, info.level_count, info.base_layer, info.layer_count,
       info.view_type, VK_ACCESS_2_SHADER_STORAGE_READ_BIT, info.stages, VK_IMAGE_LAYOUT_GENERAL);
 
   set_stages_fallback(image.stages);
@@ -207,13 +207,13 @@ T& fwrk::PassBuilder<T>::set_storage_image_read(const StorageImageInfo& info)
 }
 
 template<typename T>
-T& fwrk::PassBuilder<T>::set_storage_image_write(const StorageImageInfo& info)
+T& fwrk::PassBuilder<T>::set_storage_image_write(const ImageInfo& info)
 {
   if (!try_access(info.resource.id)) return static_cast<T&>(*this);
   auto& res = graph_->resource_deps_[info.resource.id];
 
   ImageAccess& image = pass_->images.emplace_back(
-      info.resource.id, std::nullopt, info.aspect, info.base_level, 1, info.base_layer, info.layer_count,
+      info.resource.id, std::nullopt, info.aspect, info.base_level, info.level_count, info.base_layer, info.layer_count,
       info.view_type, VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT, info.stages, VK_IMAGE_LAYOUT_GENERAL);
 
   set_stages_fallback(image.stages);
