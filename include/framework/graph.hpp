@@ -132,7 +132,7 @@ namespace fwrk {
     float timestamp_period_ = 0.0f;
 
     void get_timestamps(const QueryPool& pool);
-    void reset_timestamps(QueryPool& pool, uint32_t count) const;
+    void reset_timestamps(QueryPool& pool, VkCommandBuffer cmd, uint32_t count) const;
 
     Context* context_;
 

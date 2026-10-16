@@ -286,7 +286,7 @@ void fwrk::Graph::execute(VkCommandBuffer cmd, const uint32_t frame_index)
   if (context_->timestamps_) {
     query_pool = &query_pools_[frame_index];
     get_timestamps(*query_pool);
-    reset_timestamps(*query_pool, static_cast<uint32_t>(compiled_passes_.size() * 2));
+    reset_timestamps(*query_pool, cmd, static_cast<uint32_t>(compiled_passes_.size() * 2));
   }
 
   uint32_t query = 0;
@@ -573,7 +573,7 @@ void fwrk::Graph::get_timestamps(const QueryPool& pool)
   }
 }
 
-void fwrk::Graph::reset_timestamps(QueryPool& pool, const uint32_t count) const
+void fwrk::Graph::reset_timestamps(QueryPool& pool, VkCommandBuffer cmd, const uint32_t count) const
 {
   if (count >= pool.capacity) {
     if (pool.pool) vkDestroyQueryPool(context_->device_, pool.pool, nullptr);
@@ -586,7 +586,7 @@ void fwrk::Graph::reset_timestamps(QueryPool& pool, const uint32_t count) const
     vkCreateQueryPool(context_->device_, &info, nullptr, &pool.pool);
     pool.capacity = count;
   }
-  vkResetQueryPool(context_->device_, pool.pool, 0, count);
+  vkCmdResetQueryPool(cmd, pool.pool, 0, count);
   pool.count = count;
 }
 
