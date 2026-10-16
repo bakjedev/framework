@@ -70,7 +70,11 @@ int main()
   {
     // Creating the framework context
     MyAllocator alloc{backend.allocator};
-    fwrk::Context context{backend.instance, backend.device, frames_in_flight, alloc};
+    fwrk::Context context{{.vulkan = {.instance = backend.instance,
+                                      .physical_device = backend.physical_device,
+                                      .device = backend.device,
+                                      .frames_in_flight = frames_in_flight},
+                           .allocator = &alloc}};
 
     std::vector<fwrk::ResourceID> swapchain_imports(swapchain.images.size());
     fwrk::ResourceID depth_import{};

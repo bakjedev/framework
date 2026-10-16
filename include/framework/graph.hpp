@@ -1,5 +1,6 @@
 #pragma once
 #include <optional>
+#include <span>
 #include <string>
 #include <vector>
 #include <vulkan/vulkan.h>
@@ -15,6 +16,20 @@ namespace fwrk {
 
   class Graph {
   public:
+    struct PassTimings {
+      std::string_view name;
+      uint64_t begin;
+      uint64_t end;
+    };
+
+    struct FrameTimings {
+      uint64_t begin;
+      uint64_t end;
+      std::span<const PassTimings> passes;
+    };
+
+    ~Graph();
+
     void set_image_end_state(ResourceID resource, const PhysicalState& state);
     void set_buffer_end_state(ResourceID resource, const PhysicalState& state);
 
@@ -28,13 +43,15 @@ namespace fwrk {
 
     void execute(VkCommandBuffer cmd, uint32_t frame_index);
 
+    [[nodiscard]] FrameTimings get_timings() const;
+
   private:
     friend Context;
     template<typename T>
     friend class PassBuilder;
     friend class GraphicsPassBuilder;
 
-    explicit Graph(Context* context) : context_(context) {}
+    explicit Graph(Context* context);
 
     struct AttachmentResolveInfo {
       ResourceID resource;
@@ -91,6 +108,12 @@ namespace fwrk {
       std::string name;
     };
 
+    struct QueryPool {
+      VkQueryPool pool = VK_NULL_HANDLE;
+      uint32_t capacity = 0;
+      uint32_t count = 0;
+    };
+
     flat_hash_map<ResourceID, ResourceDependencies> resource_deps_;
 
     std::vector<Pass> passes_;
@@ -102,6 +125,14 @@ namespace fwrk {
     flat_hash_map<ResourceID, PhysicalState> end_buffer_states_;
 
     std::vector<TransientInfo> transient_infos_;
+
+    std::vector<QueryPool> query_pools_;
+    std::vector<uint64_t> query_results_;
+    std::vector<PassTimings> pass_timings_;
+    float timestamp_period_ = 0.0f;
+
+    void get_timestamps(const QueryPool& pool);
+    void reset_timestamps(QueryPool& pool, uint32_t count) const;
 
     Context* context_;
 

@@ -8,10 +8,30 @@
 #include "types/resource.hpp"
 
 namespace fwrk {
+  struct VulkanInfo {
+    VkInstance instance = VK_NULL_HANDLE;
+    VkPhysicalDevice physical_device = VK_NULL_HANDLE;
+    VkDevice device = VK_NULL_HANDLE;
+    uint32_t frames_in_flight = 0;
+  };
+
+  struct DebugMarkerInfo {
+    PFN_vkCmdBeginDebugUtilsLabelEXT cmd_begin;
+    PFN_vkCmdEndDebugUtilsLabelEXT cmd_end;
+  };
+
+  struct ContextCreateInfo {
+    VulkanInfo vulkan;
+    Allocator* allocator = nullptr;
+    std::optional<DebugMarkerInfo> debug_markers;
+    bool timestamps = false;
+  };
+
   class Context {
   public:
-    Context(VkInstance instance, VkDevice device, uint32_t frames_in_flight, Allocator& alloc,
-            bool debug_markers = false);
+    using CreateInfo = ContextCreateInfo;
+
+    explicit Context(const CreateInfo& info);
     Context(VkDevice, uint32_t, Allocator&&) = delete;
     ~Context();
 
@@ -65,15 +85,18 @@ namespace fwrk {
     std::vector<PhysicalImage> transient_images_;
     std::vector<PhysicalBuffer> transient_buffers_;
 
+    VkPhysicalDevice physical_device_ = VK_NULL_HANDLE;
     VkDevice device_ = VK_NULL_HANDLE;
     uint32_t frames_in_flight_ = 0;
     uint32_t frame_index_ = 0;
     uint64_t frame_ = 0;
 
-    Allocator& alloc_;
+    Allocator* alloc_;
 
     PFN_vkCmdBeginDebugUtilsLabelEXT begin_debug_pfn_ = nullptr;
     PFN_vkCmdEndDebugUtilsLabelEXT end_debug_pfn_ = nullptr;
+
+    bool timestamps_ = false;
 
     Graph graph_{this};
 

@@ -5,6 +5,12 @@
 #include "framework/context.hpp"
 #include "framework/types/pass.hpp"
 
+fwrk::Graph::~Graph()
+{
+  for (const QueryPool& pool: query_pools_)
+    if (pool.pool) vkDestroyQueryPool(context_->device_, pool.pool, nullptr);
+}
+
 void fwrk::Graph::set_image_end_state(const ResourceID resource, const PhysicalState& state)
 {
   end_image_states_[resource] = state;
@@ -255,6 +261,9 @@ bool fwrk::Graph::compile()
     }
   }
 
+  for (QueryPool& pool: query_pools_) pool.count = 0;
+  pass_timings_.clear();
+
   context_->schedule_destroy_transients();
   context_->allocate_transients(std::move(transient_infos_));
 
@@ -272,6 +281,15 @@ void fwrk::Graph::execute(VkCommandBuffer cmd, const uint32_t frame_index)
   context_->destroy_transients(frame_index);
 
   if (!cmd) return;
+
+  QueryPool* query_pool = nullptr;
+  if (context_->timestamps_) {
+    query_pool = &query_pools_[frame_index];
+    get_timestamps(*query_pool);
+    reset_timestamps(*query_pool, static_cast<uint32_t>(compiled_passes_.size() * 2));
+  }
+
+  uint32_t query = 0;
   for (const CompiledPass& pass: compiled_passes_) {
     // ---------------------
     // Create image barriers
@@ -430,10 +448,14 @@ void fwrk::Graph::execute(VkCommandBuffer cmd, const uint32_t frame_index)
     // Execute pass
     // ------------
     if (context_->begin_debug_pfn_) context_->begin_debug_pfn_(cmd, &pass.debug);
+    if (context_->timestamps_)
+      vkCmdWriteTimestamp2(cmd, VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT, query_pool->pool, query++);
     vkCmdPipelineBarrier2(cmd, &dep_info);
     if (pass.render) vkCmdBeginRendering(cmd, &rendering_info);
     pass.func(cmd);
     if (pass.render) vkCmdEndRendering(cmd);
+    if (context_->timestamps_)
+      vkCmdWriteTimestamp2(cmd, VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT, query_pool->pool, query++);
     if (context_->end_debug_pfn_) context_->end_debug_pfn_(cmd);
   }
   // --------------------------
@@ -510,6 +532,62 @@ void fwrk::Graph::execute(VkCommandBuffer cmd, const uint32_t frame_index)
   // Execute end states
   // ------------------
   vkCmdPipelineBarrier2(cmd, &end_dep_info);
+}
+
+fwrk::Graph::FrameTimings fwrk::Graph::get_timings() const
+{
+  uint64_t end = 0;
+  for (const PassTimings& timing: pass_timings_) end = std::max(end, timing.end);
+  return {.begin = 0, .end = end, .passes = pass_timings_};
+}
+
+fwrk::Graph::Graph(Context* context) : context_(context)
+{
+  if (context->timestamps_) {
+    query_pools_.resize(context_->frames_in_flight_);
+
+    VkPhysicalDeviceProperties properties;
+    vkGetPhysicalDeviceProperties(context_->physical_device_, &properties);
+    timestamp_period_ = properties.limits.timestampPeriod;
+  }
+}
+
+void fwrk::Graph::get_timestamps(const QueryPool& pool)
+{
+  if (pool.count == 0) return;
+  query_results_.resize(pool.count);
+
+  if (vkGetQueryPoolResults(context_->device_, pool.pool, 0, pool.count, query_results_.size() * sizeof(uint64_t),
+                            query_results_.data(), sizeof(uint64_t), VK_QUERY_RESULT_64_BIT) != VK_SUCCESS) {
+    return;
+  }
+
+  const uint64_t start = query_results_[0];
+
+  pass_timings_.resize(pool.count / 2);
+  for (size_t i = 0; i < pass_timings_.size(); ++i) {
+    pass_timings_[i] = {
+        .name = compiled_passes_[i].name,
+        .begin = static_cast<uint64_t>(static_cast<float>(query_results_[2 * i] - start) * timestamp_period_),
+        .end = static_cast<uint64_t>(static_cast<float>(query_results_[2 * i + 1] - start) * timestamp_period_)};
+  }
+}
+
+void fwrk::Graph::reset_timestamps(QueryPool& pool, const uint32_t count) const
+{
+  if (count >= pool.capacity) {
+    if (pool.pool) vkDestroyQueryPool(context_->device_, pool.pool, nullptr);
+    const VkQueryPoolCreateInfo info{.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO,
+                                     .pNext = nullptr,
+                                     .flags = 0U,
+                                     .queryType = VK_QUERY_TYPE_TIMESTAMP,
+                                     .queryCount = count,
+                                     .pipelineStatistics = 0U};
+    vkCreateQueryPool(context_->device_, &info, nullptr, &pool.pool);
+    pool.capacity = count;
+  }
+  vkResetQueryPool(context_->device_, pool.pool, 0, count);
+  pool.count = count;
 }
 
 VkImageAspectFlags fwrk::Graph::get_aspect_for_format(const VkFormat format)

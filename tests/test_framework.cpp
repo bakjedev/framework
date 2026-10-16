@@ -11,7 +11,11 @@ struct MyAllocator : fwrk::Allocator {
 TEST(Framework, SimpleTest)
 {
   MyAllocator alloc{};
-  fwrk::Context context{nullptr, nullptr, 1, alloc};
+  fwrk::Context context{
+      {.vulkan = {.instance = nullptr, .physical_device = nullptr, .device = nullptr, .frames_in_flight = 1},
+       .allocator = nullptr,
+       .debug_markers = std::nullopt,
+       .timestamps = false}};
 
   const auto buf = context.import_buffer({.size = 0, .state = fwrk::PhysicalState::Undefined}, nullptr, "Data");
 

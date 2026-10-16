@@ -1,14 +1,13 @@
 #include "framework/context.hpp"
 #include <stdexcept>
 
-fwrk::Context::Context(VkInstance instance, VkDevice device, const uint32_t frames_in_flight, Allocator& alloc,
-                       const bool debug_markers) : device_(device), frames_in_flight_(frames_in_flight), alloc_(alloc)
+fwrk::Context::Context(const CreateInfo& info) :
+    physical_device_(info.vulkan.physical_device), device_(info.vulkan.device),
+    frames_in_flight_(info.vulkan.frames_in_flight), alloc_(info.allocator), timestamps_(info.timestamps)
 {
-  if (debug_markers) {
-    begin_debug_pfn_ = reinterpret_cast<PFN_vkCmdBeginDebugUtilsLabelEXT>(
-        vkGetInstanceProcAddr(instance, "vkCmdBeginDebugUtilsLabelEXT"));
-    end_debug_pfn_ =
-        reinterpret_cast<PFN_vkCmdEndDebugUtilsLabelEXT>(vkGetInstanceProcAddr(instance, "vkCmdEndDebugUtilsLabelEXT"));
+  if (info.debug_markers) {
+    begin_debug_pfn_ = info.debug_markers->cmd_begin;
+    end_debug_pfn_ = info.debug_markers->cmd_end;
   }
 }
 
@@ -159,21 +158,24 @@ VkBuffer fwrk::Context::get_raw_buffer(const ResourceID resource, const std::opt
 
 void fwrk::Context::allocate_transients(std::vector<Graph::TransientInfo> infos)
 {
+  if (!infos.empty() && !alloc_) {
+    throw std::runtime_error("Tried to create transients without a valid allocator");
+  }
   for (auto& [desc, name]: infos) {
     if (std::holds_alternative<ImageCreateInfo>(desc)) {
       auto& info = std::get<ImageCreateInfo>(desc);
       const auto physical_id = transient_images_.size();
       for (uint32_t i = 0; i < frames_in_flight_; i++) {
-        std::optional<PhysicalImage> physical = alloc_.create_image(info);
-        transient_images_.push_back(std::move(*physical));
+        std::optional<PhysicalImage> physical = alloc_->create_image(info);
+        transient_images_.push_back(physical.value_or(PhysicalImage{VK_NULL_HANDLE, PhysicalState::Undefined}));
       }
       transients_.emplace_back(Image{info.type, info.size, info.format}, physical_id, std::move(name));
     } else if (std::holds_alternative<BufferCreateInfo>(desc)) {
       auto& info = std::get<BufferCreateInfo>(desc);
       const auto physical_id = transient_buffers_.size();
       for (uint32_t i = 0; i < frames_in_flight_; i++) {
-        std::optional<PhysicalBuffer> physical = alloc_.create_buffer(info);
-        transient_buffers_.push_back(*physical);
+        std::optional<PhysicalBuffer> physical = alloc_->create_buffer(info);
+        transient_buffers_.push_back(physical.value_or(PhysicalBuffer{VK_NULL_HANDLE, PhysicalState::Undefined}));
       }
       transients_.emplace_back(Buffer{info.size}, physical_id, std::move(name));
     }
@@ -202,17 +204,17 @@ void fwrk::Context::destroy_transients(const uint32_t frame_index)
 
 void fwrk::Context::destroy_transient(const Resource& transient)
 {
+  if (!alloc_) return;
   if (std::holds_alternative<Image>(transient.desc)) {
     for (uint32_t i = 0; i < frames_in_flight_; i++) {
-      alloc_.destroy_image(transient_images_.at(transient.physical_id + i));
+      alloc_->destroy_image(transient_images_.at(transient.physical_id + i));
     }
   } else if (std::holds_alternative<Buffer>(transient.desc)) {
     for (uint32_t i = 0; i < frames_in_flight_; i++) {
-      alloc_.destroy_buffer(transient_buffers_.at(transient.physical_id + i));
+      alloc_->destroy_buffer(transient_buffers_.at(transient.physical_id + i));
     }
   }
 }
-
 
 VkImageView fwrk::Context::get_image_view(const ViewKey& key, const Image& image, PhysicalImage& phys) const
 {
