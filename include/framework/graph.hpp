@@ -14,6 +14,23 @@
 namespace fwrk {
   class Context;
 
+  struct BarrierBatch {
+    std::vector<VkImageMemoryBarrier2> images;
+    std::vector<VkBufferMemoryBarrier2> buffers;
+
+    void clear();
+    void record(VkCommandBuffer cmd) const;
+  };
+
+  struct Rendering {
+    std::vector<VkRenderingAttachmentInfo> colors;
+    std::optional<VkRenderingAttachmentInfo> depth;
+    VkRenderingInfo info;
+
+    void clear();
+    void begin(VkCommandBuffer cmd) const;
+  };
+
   class Graph {
   public:
     struct PassTimings {
@@ -76,13 +93,13 @@ namespace fwrk {
       RenderInfo render_info;
     };
 
-    struct ImageMemoryBarrier {
+    struct ImageBarrierInfo {
       ResourceID resource;
       PhysicalState dst_state{};
       VkImageSubresourceRange subresource_range{};
     };
 
-    struct BufferMemoryBarrier {
+    struct BufferBarrierInfo {
       ResourceID resource;
       PhysicalState dst_state{};
       VkDeviceSize size{};
@@ -90,8 +107,8 @@ namespace fwrk {
     };
 
     struct DependencyInfo {
-      std::vector<ImageMemoryBarrier> image_barriers;
-      std::vector<BufferMemoryBarrier> buffer_barriers;
+      std::vector<ImageBarrierInfo> image_barriers;
+      std::vector<BufferBarrierInfo> buffer_barriers;
     };
 
     struct CompiledPass {
@@ -101,6 +118,8 @@ namespace fwrk {
       std::string name;
       std::function<void(VkCommandBuffer cmd)> func;
     };
+
+    using ResolvedImage = std::pair<const Image&, PhysicalImage&>;
 
     using TransientDesc = std::variant<ImageCreateInfo, BufferCreateInfo>;
     struct TransientInfo {
@@ -121,6 +140,9 @@ namespace fwrk {
     std::vector<uint32_t> sorted_pass_ids_;
     std::vector<CompiledPass> compiled_passes_;
 
+    BarrierBatch barriers_;
+    Rendering rendering_;
+
     flat_hash_map<ResourceID, PhysicalState> end_image_states_;
     flat_hash_map<ResourceID, PhysicalState> end_buffer_states_;
 
@@ -130,6 +152,21 @@ namespace fwrk {
     std::vector<uint64_t> query_results_;
     std::vector<PassTimings> pass_timings_;
     float timestamp_period_ = 0.0f;
+
+    [[nodiscard]] ResolvedImage resolve_image(ResourceID id) const;
+    [[nodiscard]] PhysicalBuffer& resolve_buffer(ResourceID id) const;
+
+    void create_pass_barriers(const DependencyInfo& deps);
+    void create_end_barriers();
+
+    VkRenderingAttachmentInfo create_attachment(const RenderingAttachmentInfo& att, VkExtent2D& extent) const;
+    void create_rendering(const RenderingInfo& info);
+
+    static void transition_image(std::vector<VkImageMemoryBarrier2>& barriers, PhysicalImage& image,
+                                 const PhysicalState& state, const VkImageSubresourceRange& subresource_range);
+
+    static void transition_buffer(std::vector<VkBufferMemoryBarrier2>& barriers, PhysicalBuffer& buffer,
+                                  const PhysicalState& state, VkDeviceSize offset, VkDeviceSize size);
 
     void get_timestamps(const QueryPool& pool);
     void reset_timestamps(QueryPool& pool, VkCommandBuffer cmd, uint32_t count) const;

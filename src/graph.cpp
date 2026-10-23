@@ -5,6 +5,35 @@
 #include "framework/context.hpp"
 #include "framework/types/pass.hpp"
 
+void fwrk::BarrierBatch::clear()
+{
+  images.clear();
+  buffers.clear();
+}
+
+void fwrk::BarrierBatch::record(VkCommandBuffer cmd) const
+{
+  if (images.empty() && buffers.empty()) return;
+  const VkDependencyInfo info{.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+                              .pNext = nullptr,
+                              .dependencyFlags = 0U,
+                              .memoryBarrierCount = 0,
+                              .pMemoryBarriers = nullptr,
+                              .bufferMemoryBarrierCount = static_cast<uint32_t>(buffers.size()),
+                              .pBufferMemoryBarriers = buffers.data(),
+                              .imageMemoryBarrierCount = static_cast<uint32_t>(images.size()),
+                              .pImageMemoryBarriers = images.data()};
+  vkCmdPipelineBarrier2(cmd, &info);
+}
+
+void fwrk::Rendering::clear()
+{
+  colors.clear();
+  depth.reset();
+}
+
+void fwrk::Rendering::begin(VkCommandBuffer cmd) const { vkCmdBeginRendering(cmd, &info); }
+
 fwrk::Graph::~Graph()
 {
   for (const QueryPool& pool: query_pools_)
@@ -291,247 +320,56 @@ void fwrk::Graph::execute(VkCommandBuffer cmd, const uint32_t frame_index)
 
   uint32_t query = 0;
   for (const CompiledPass& pass: compiled_passes_) {
-    // ---------------------
-    // Create image barriers
-    // ---------------------
-    std::vector<VkImageMemoryBarrier2> image_barriers;
-    for (const auto& img_barr: pass.deps.image_barriers) {
-      const ResourceID resolved = context_->resolve_proxy(img_barr.resource);
-      const Resource& resource = context_->get_resource(resolved);
-      PhysicalImage& image = context_->get_physical_image(resource.physical_id, resolved.type());
-
-      if (image.state != img_barr.dst_state) {
-        VkImageAspectFlags aspect = img_barr.subresource_range.aspectMask;
-        if (aspect == VK_IMAGE_ASPECT_NONE && std::holds_alternative<Image>(resource.desc)) {
-          aspect = get_aspect_for_format(std::get<Image>(resource.desc).format);
-        }
-
-        VkImageMemoryBarrier2& barrier = image_barriers.emplace_back(VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2);
-        barrier.srcStageMask = image.state.stages;
-        barrier.srcAccessMask = image.state.access;
-        barrier.oldLayout = image.state.layout;
-        barrier.dstStageMask = img_barr.dst_state.stages;
-        barrier.dstAccessMask = img_barr.dst_state.access;
-        barrier.newLayout = img_barr.dst_state.layout;
-        barrier.image = image.handle;
-        barrier.subresourceRange = {.aspectMask = aspect,
-                                    .baseMipLevel = img_barr.subresource_range.baseMipLevel,
-                                    .levelCount = img_barr.subresource_range.levelCount,
-                                    .baseArrayLayer = img_barr.subresource_range.baseArrayLayer,
-                                    .layerCount = img_barr.subresource_range.layerCount};
-
-        image.state = img_barr.dst_state;
-      }
-    }
-
-    // ----------------------
-    // Create buffer barriers
-    // ----------------------
-    std::vector<VkBufferMemoryBarrier2> buffer_barriers;
-    for (const auto& buf_barr: pass.deps.buffer_barriers) {
-      const ResourceID resolved = context_->resolve_proxy(buf_barr.resource);
-      const Resource& resource = context_->get_resource(resolved);
-      PhysicalBuffer& buffer = context_->get_physical_buffer(resource.physical_id, resolved.type());
-
-      if (buffer.state != buf_barr.dst_state) {
-        VkBufferMemoryBarrier2& barrier = buffer_barriers.emplace_back(VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2);
-        barrier.srcStageMask = buffer.state.stages;
-        barrier.srcAccessMask = buffer.state.access;
-        barrier.dstStageMask = buf_barr.dst_state.stages;
-        barrier.dstAccessMask = buf_barr.dst_state.access;
-        barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        barrier.buffer = buffer.handle;
-        barrier.offset = buf_barr.offset;
-        barrier.size = buf_barr.size;
-
-        buffer.state = buf_barr.dst_state;
-      }
-    }
-
-    // ----------------------
-    // Create dependency info
-    // ----------------------
-    VkDependencyInfo dep_info{.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-                              .pNext = nullptr,
-                              .dependencyFlags = 0u,
-                              .memoryBarrierCount = 0,
-                              .pMemoryBarriers = nullptr,
-                              .bufferMemoryBarrierCount = static_cast<uint32_t>(buffer_barriers.size()),
-                              .pBufferMemoryBarriers = buffer_barriers.data(),
-                              .imageMemoryBarrierCount = static_cast<uint32_t>(image_barriers.size()),
-                              .pImageMemoryBarriers = image_barriers.data()};
+    // --------------------
+    // Create Pass Barriers
+    // --------------------
+    barriers_.clear();
+    create_pass_barriers(pass.deps);
 
     // ---------------------
-    // Create rendering info
+    // Create Rendering Info
     // ---------------------
-    VkRenderingInfo rendering_info{};
-    std::vector<VkRenderingAttachmentInfo> color_attachments;
-    std::optional<VkRenderingAttachmentInfo> depth_attachment{};
     if (pass.render) {
-      VkExtent2D extent{UINT32_MAX, UINT32_MAX};
-
-      for (auto& att: pass.render->color_atts) {
-        const ResourceID resolved_resource_id = context_->resolve_proxy(att.resource);
-        const Resource& resource = context_->get_resource(resolved_resource_id);
-        if (std::holds_alternative<Image>(resource.desc)) {
-          const auto& image = std::get<Image>(resource.desc);
-          PhysicalImage& physical = context_->get_physical_image(resource.physical_id, resolved_resource_id.type());
-
-          VkRenderingAttachmentInfo info{};
-          info.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-          info.imageView = context_->get_image_view({att.subresource, att.view_type}, image, physical);
-          info.imageLayout = att.layout;
-          if (att.resolve) {
-            const ResourceID resolved_resolve_resource_id = context_->resolve_proxy(att.resolve->resource);
-            const Resource& resolve_resource = context_->get_resource(resolved_resolve_resource_id);
-            PhysicalImage& resolve_physical =
-                context_->get_physical_image(resolve_resource.physical_id, resolved_resolve_resource_id.type());
-
-            info.resolveImageView = context_->get_image_view({att.resolve->subresource, att.view_type},
-                                                             std::get<Image>(resolve_resource.desc), resolve_physical);
-            info.resolveMode = static_cast<VkResolveModeFlagBits>(att.resolve->mode);
-            info.resolveImageLayout = att.layout;
-          }
-          info.loadOp = att.load_op;
-          info.storeOp = att.store_op;
-          info.clearValue = att.clear_value;
-
-          color_attachments.push_back(info);
-
-          extent.width = std::min(extent.width, std::max(1u, image.size.width >> att.subresource.baseMipLevel));
-          extent.height = std::min(extent.height, std::max(1u, image.size.height >> att.subresource.baseMipLevel));
-        }
-      }
-
-      if (pass.render->depth_att) {
-        const RenderingAttachmentInfo& att = *pass.render->depth_att;
-        const ResourceID resolved_resource_id = context_->resolve_proxy(att.resource);
-        const Resource& resource = context_->get_resource(resolved_resource_id);
-        if (std::holds_alternative<Image>(resource.desc)) {
-          const auto& image = std::get<Image>(resource.desc);
-          PhysicalImage& physical = context_->get_physical_image(resource.physical_id, resolved_resource_id.type());
-
-          VkRenderingAttachmentInfo& info = depth_attachment.emplace();
-          info.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-          info.imageView = context_->get_image_view({att.subresource, att.view_type}, image, physical);
-          info.imageLayout = att.layout;
-          if (att.resolve) {
-            const ResourceID resolved_resolve_resource_id = context_->resolve_proxy(att.resolve->resource);
-            const Resource& resolve_resource = context_->get_resource(resolved_resolve_resource_id);
-            PhysicalImage& resolve_physical =
-                context_->get_physical_image(resolve_resource.physical_id, resolved_resolve_resource_id.type());
-            info.resolveImageView = context_->get_image_view({att.resolve->subresource, att.view_type},
-                                                             std::get<Image>(resolve_resource.desc), resolve_physical);
-            info.resolveMode = static_cast<VkResolveModeFlagBits>(att.resolve->mode);
-            info.resolveImageLayout = att.layout;
-          }
-          info.loadOp = att.load_op;
-          info.storeOp = att.store_op;
-          info.clearValue = att.clear_value;
-
-          extent.width = std::min(extent.width, std::max(1u, image.size.width >> att.subresource.baseMipLevel));
-          extent.height = std::min(extent.height, std::max(1u, image.size.height >> att.subresource.baseMipLevel));
-        }
-      }
-      rendering_info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
-      rendering_info.layerCount = pass.render->render_info.layer_count;
-      rendering_info.viewMask = pass.render->render_info.view_mask;
-      rendering_info.renderArea.extent = pass.render->render_info.render_area.value_or(extent);
-      rendering_info.colorAttachmentCount = static_cast<uint32_t>(color_attachments.size());
-      rendering_info.pColorAttachments = color_attachments.data();
-      if (depth_attachment) rendering_info.pDepthAttachment = &*depth_attachment;
+      rendering_.clear();
+      create_rendering(*pass.render);
     }
 
-
-    // ------------
-    // Execute pass
-    // ------------
+    // -----------------------------------------
+    // Begin Debug Labels and Starting Timestamp
+    // -----------------------------------------
     if (context_->begin_debug_pfn_) context_->begin_debug_pfn_(cmd, &pass.debug);
     if (context_->timestamps_)
       vkCmdWriteTimestamp2(cmd, VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT, query_pool->pool, query++);
-    vkCmdPipelineBarrier2(cmd, &dep_info);
-    if (pass.render) vkCmdBeginRendering(cmd, &rendering_info);
+
+    // ------------
+    // Execute Pass
+    // ------------
+    barriers_.record(cmd);
+
+    if (pass.render) rendering_.begin(cmd);
+
     pass.func(cmd);
+
     if (pass.render) vkCmdEndRendering(cmd);
+
+    // -------------------------------------
+    // End Debug Labels and Ending Timestamp
+    // -------------------------------------
     if (context_->timestamps_)
       vkCmdWriteTimestamp2(cmd, VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT, query_pool->pool, query++);
     if (context_->end_debug_pfn_) context_->end_debug_pfn_(cmd);
   }
-  // --------------------------
-  // Create end image barriers
-  // --------------------------
-  std::vector<VkImageMemoryBarrier2> end_image_barriers;
-  for (const auto& [id, state]: end_image_states_) {
-    const ResourceID resolved = context_->resolve_proxy(id);
-    const Resource& resource = context_->get_resource(resolved);
-    if (!std::holds_alternative<Image>(resource.desc)) continue;
 
-    PhysicalImage& physical = context_->get_physical_image(resource.physical_id, resolved.type());
+  // -------------------
+  // Create End Barriers
+  // -------------------
+  barriers_.clear();
+  create_end_barriers();
 
-    if (physical.state != state) {
-      VkImageMemoryBarrier2& barrier = end_image_barriers.emplace_back(VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2);
-      barrier.srcStageMask = physical.state.stages;
-      barrier.srcAccessMask = physical.state.access;
-      barrier.oldLayout = physical.state.layout;
-      barrier.dstStageMask = state.stages;
-      barrier.dstAccessMask = state.access;
-      barrier.newLayout = state.layout;
-      barrier.image = physical.handle;
-      barrier.subresourceRange = {.aspectMask = get_aspect_for_format(std::get<Image>(resource.desc).format),
-                                  .baseMipLevel = 0,
-                                  .levelCount = VK_REMAINING_MIP_LEVELS,
-                                  .baseArrayLayer = 0,
-                                  .layerCount = VK_REMAINING_ARRAY_LAYERS};
-
-      physical.state = state;
-    }
-  }
-
-  // --------------------------
-  // Create end buffer barriers
-  // --------------------------
-  std::vector<VkBufferMemoryBarrier2> end_buffer_barriers;
-  for (const auto& [id, state]: end_buffer_states_) {
-    const ResourceID resolved = context_->resolve_proxy(id);
-    const Resource& resource = context_->get_resource(resolved);
-    if (!std::holds_alternative<Buffer>(resource.desc)) continue;
-
-    PhysicalBuffer& physical = context_->get_physical_buffer(resource.physical_id, resolved.type());
-
-    if (physical.state != state) {
-      VkBufferMemoryBarrier2& barrier = end_buffer_barriers.emplace_back(VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2);
-      barrier.srcStageMask = physical.state.stages;
-      barrier.srcAccessMask = physical.state.access;
-      barrier.dstStageMask = state.stages;
-      barrier.dstAccessMask = state.access;
-      barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-      barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-      barrier.buffer = physical.handle;
-      barrier.offset = 0;
-      barrier.size = VK_WHOLE_SIZE;
-
-      physical.state = state;
-    }
-  }
-
-  // --------------------------
-  // Create end dependency info
-  // --------------------------
-  VkDependencyInfo end_dep_info{.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-                                .pNext = nullptr,
-                                .dependencyFlags = 0u,
-                                .memoryBarrierCount = 0,
-                                .pMemoryBarriers = nullptr,
-                                .bufferMemoryBarrierCount = static_cast<uint32_t>(end_buffer_barriers.size()),
-                                .pBufferMemoryBarriers = end_buffer_barriers.data(),
-                                .imageMemoryBarrierCount = static_cast<uint32_t>(end_image_barriers.size()),
-                                .pImageMemoryBarriers = end_image_barriers.data()};
-
-  // ------------------
-  // Execute end states
-  // ------------------
-  vkCmdPipelineBarrier2(cmd, &end_dep_info);
+  // --------------------
+  // Execute End Barriers
+  // --------------------
+  barriers_.record(cmd);
 }
 
 fwrk::Graph::FrameTimings fwrk::Graph::get_timings() const
@@ -543,13 +381,162 @@ fwrk::Graph::FrameTimings fwrk::Graph::get_timings() const
 
 fwrk::Graph::Graph(Context* context) : context_(context)
 {
+  // If no valid physical device was given it just won't pre-allocate the color attachments and timestamps won't work.
+  if (context_->physical_device_ == VK_NULL_HANDLE) return;
+
+  VkPhysicalDeviceProperties properties;
+  vkGetPhysicalDeviceProperties(context_->physical_device_, &properties);
+
+  rendering_.colors.reserve(properties.limits.maxColorAttachments);
+
   if (context->timestamps_) {
     query_pools_.resize(context_->frames_in_flight_);
-
-    VkPhysicalDeviceProperties properties;
-    vkGetPhysicalDeviceProperties(context_->physical_device_, &properties);
     timestamp_period_ = properties.limits.timestampPeriod;
   }
+}
+
+fwrk::Graph::ResolvedImage fwrk::Graph::resolve_image(const ResourceID id) const
+{
+  const ResourceID resolved = context_->resolve_proxy(id);
+  const Resource& resource = context_->get_resource(resolved);
+  assert(std::holds_alternative<Image>(resource.desc));
+  return {std::get<Image>(resource.desc), context_->get_physical_image(resource.physical_id, resolved.type())};
+}
+
+fwrk::PhysicalBuffer& fwrk::Graph::resolve_buffer(const ResourceID id) const
+{
+  const ResourceID resolved = context_->resolve_proxy(id);
+  const Resource& resource = context_->get_resource(resolved);
+  assert(std::holds_alternative<Buffer>(resource.desc));
+  return context_->get_physical_buffer(resource.physical_id, resolved.type());
+}
+
+void fwrk::Graph::create_pass_barriers(const DependencyInfo& deps)
+{
+  // Images
+  for (const auto& img_barr: deps.image_barriers) {
+    auto [image, physical] = resolve_image(img_barr.resource);
+
+    VkImageSubresourceRange subresource_range = img_barr.subresource_range;
+    if (subresource_range.aspectMask == VK_IMAGE_ASPECT_NONE)
+      subresource_range.aspectMask = get_aspect_for_format(image.format);
+
+    transition_image(barriers_.images, physical, img_barr.dst_state, subresource_range);
+  }
+
+  // Buffers
+  for (const auto& buf_barr: deps.buffer_barriers) {
+    transition_buffer(barriers_.buffers, resolve_buffer(buf_barr.resource), buf_barr.dst_state, buf_barr.offset,
+                      buf_barr.size);
+  }
+}
+
+void fwrk::Graph::create_end_barriers()
+{
+  // Images
+  for (const auto& [id, state]: end_image_states_) {
+    const auto& [image, physical] = resolve_image(id);
+
+    VkImageSubresourceRange subresource_range = {.aspectMask = get_aspect_for_format(image.format),
+                                                 .baseMipLevel = 0,
+                                                 .levelCount = VK_REMAINING_MIP_LEVELS,
+                                                 .baseArrayLayer = 0,
+                                                 .layerCount = VK_REMAINING_ARRAY_LAYERS};
+
+    transition_image(barriers_.images, physical, state, subresource_range);
+  }
+
+  // Buffers
+  for (const auto& [id, state]: end_buffer_states_) {
+    transition_buffer(barriers_.buffers, resolve_buffer(id), state, 0, VK_WHOLE_SIZE);
+  }
+}
+
+VkRenderingAttachmentInfo fwrk::Graph::create_attachment(const RenderingAttachmentInfo& att, VkExtent2D& extent) const
+{
+  auto [image, physical] = resolve_image(att.resource);
+
+  VkRenderingAttachmentInfo info{
+      .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+      .pNext = nullptr,
+      .imageView = context_->get_image_view({att.subresource, att.view_type}, image, physical),
+      .imageLayout = att.layout,
+      .resolveMode = VK_RESOLVE_MODE_NONE,
+      .resolveImageView = VK_NULL_HANDLE,
+      .resolveImageLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+      .loadOp = att.load_op,
+      .storeOp = att.store_op,
+      .clearValue = att.clear_value};
+
+  if (att.resolve) {
+    auto [image_resolve, physical_resolve] = resolve_image(att.resolve->resource);
+    info.resolveMode = static_cast<VkResolveModeFlagBits>(att.resolve->mode);
+    info.resolveImageView =
+        context_->get_image_view({att.resolve->subresource, att.view_type}, image_resolve, physical_resolve);
+    info.resolveImageLayout = att.layout;
+  }
+
+  extent.width = std::min(extent.width, std::max(1u, image.size.width >> att.subresource.baseMipLevel));
+  extent.height = std::min(extent.height, std::max(1u, image.size.height >> att.subresource.baseMipLevel));
+
+  return info;
+}
+
+void fwrk::Graph::create_rendering(const RenderingInfo& info)
+{
+  VkExtent2D extent{.width = UINT32_MAX, .height = UINT32_MAX};
+
+  for (const auto& att: info.color_atts) rendering_.colors.push_back(create_attachment(att, extent));
+
+  if (info.depth_att) rendering_.depth = create_attachment(*info.depth_att, extent);
+
+  rendering_.info = {.sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
+                     .pNext = nullptr,
+                     .flags = 0U,
+                     .renderArea = {.offset = {}, .extent = info.render_info.render_area.value_or(extent)},
+                     .layerCount = info.render_info.layer_count,
+                     .viewMask = info.render_info.view_mask,
+                     .colorAttachmentCount = static_cast<uint32_t>(rendering_.colors.size()),
+                     .pColorAttachments = rendering_.colors.data(),
+                     .pDepthAttachment = rendering_.depth ? &*rendering_.depth : nullptr,
+                     .pStencilAttachment = nullptr};
+}
+
+void fwrk::Graph::transition_image(std::vector<VkImageMemoryBarrier2>& barriers, PhysicalImage& image,
+                                   const PhysicalState& state, const VkImageSubresourceRange& subresource_range)
+{
+  if (image.state == state) return;
+  barriers.push_back({.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+                      .pNext = nullptr,
+                      .srcStageMask = image.state.stages,
+                      .srcAccessMask = image.state.access,
+                      .dstStageMask = state.stages,
+                      .dstAccessMask = state.access,
+                      .oldLayout = image.state.layout,
+                      .newLayout = state.layout,
+                      .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                      .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                      .image = image.handle,
+                      .subresourceRange = subresource_range});
+  image.state = state;
+}
+
+void fwrk::Graph::transition_buffer(std::vector<VkBufferMemoryBarrier2>& barriers, PhysicalBuffer& buffer,
+                                    const PhysicalState& state, const VkDeviceSize offset, const VkDeviceSize size)
+{
+  if (buffer.state == state) return;
+  barriers.push_back({.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2,
+                      .pNext = nullptr,
+                      .srcStageMask = buffer.state.stages,
+                      .srcAccessMask = buffer.state.access,
+                      .dstStageMask = state.stages,
+                      .dstAccessMask = state.access,
+                      .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                      .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                      .buffer = buffer.handle,
+                      .offset = offset,
+                      .size = size});
+  buffer.state = state;
 }
 
 void fwrk::Graph::get_timestamps(const QueryPool& pool)
