@@ -41,14 +41,28 @@ namespace fwrk {
     VkImageType type;
     VkExtent3D size;
     VkFormat format;
+    uint32_t mip_count;
+    uint32_t layer_count;
   };
 
   struct PhysicalImage {
     VkImage handle;
-    PhysicalState state;
+    PhysicalState uniform_state;
+    std::vector<PhysicalState> states;
+    uint32_t levels;
+    uint32_t layers;
     flat_hash_map<ViewKey, VkImageView, ViewKeyHasher> views;
 
-    PhysicalImage(VkImage h, PhysicalState s) : handle(h), state(s) {}
+    PhysicalImage(VkImage h, const PhysicalState& s, const uint32_t lvl, const uint32_t lyr) :
+        handle(h), uniform_state(s), levels(lvl), layers(lyr)
+    {
+    }
+
+    [[nodiscard]] bool is_state_uniform() const { return states.empty(); }
+    [[nodiscard]] PhysicalState& state_at(const uint32_t mip, const uint32_t layer)
+    {
+      return states.at(mip * layers + layer);
+    }
   };
 
   template<typename T>
@@ -56,6 +70,8 @@ namespace fwrk {
     { img.type() } -> std::same_as<VkImageType>;
     { img.size() } -> std::same_as<VkExtent3D>;
     { img.format() } -> std::same_as<VkFormat>;
+    { img.mips() } -> std::same_as<uint32_t>;
+    { img.layers() } -> std::same_as<uint32_t>;
     { img.image() } -> std::same_as<VkImage>;
   };
 
@@ -63,6 +79,8 @@ namespace fwrk {
     VkImageType type;
     VkExtent3D size;
     VkFormat format;
+    uint32_t mip_count;
+    uint32_t layer_count;
     PhysicalState state;
   };
 

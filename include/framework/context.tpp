@@ -3,11 +3,13 @@
 template<fwrk::ImageInterface I>
 fwrk::ResourceID fwrk::Context::import_image(const I& image, const PhysicalState& state, std::string name)
 {
+  assert(image.mips() > 0 && image.layers() > 0 && "Invalid mip or array count");
   const auto physical_id = images_.size();
-  images_.emplace_back(image.image(), state);
+  images_.emplace_back(image.image(), state, image.mips(), image.layers());
 
   const auto id = resources_.size();
-  resources_.emplace_back(Image{image.type(), image.size(), image.format()}, physical_id, std::move(name));
+  resources_.emplace_back(Image{image.type(), image.size(), image.format(), image.mips(), image.layers()}, physical_id,
+                          std::move(name));
 
   return ResourceID{ResourceType::Import, id};
 }
@@ -28,18 +30,22 @@ template<fwrk::ImageInterface I>
 void fwrk::Context::update_image(const ResourceID resource, const I& image, const PhysicalState& state)
 {
   if (!resource || resource.type() != ResourceType::Import || resource.type() == ResourceType::Transient) return;
+  assert(image.mips() > 0 && image.layers() > 0 && "Invalid mip or array count");
   Resource& res = resources_.at(resource.index());
   if (!std::holds_alternative<Image>(res.desc)) return;
 
   PhysicalImage& phys = images_.at(res.physical_id);
   destroy_views(phys);
 
-  auto& [type, size, format] = std::get<Image>(res.desc);
+  auto& [type, size, format, mips, layers] = std::get<Image>(res.desc);
   type = image.type();
   size = image.size();
   format = image.format();
+  mips = image.mips();
+  layers = image.layers();
 
-  phys.state = state;
+  phys.uniform_state = state;
+  phys.states.clear();
   phys.handle = image.image();
 }
 

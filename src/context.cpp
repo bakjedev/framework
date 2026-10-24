@@ -44,11 +44,13 @@ fwrk::Context::~Context()
 
 fwrk::ResourceID fwrk::Context::import_image(const ImageImportInfo& info, VkImage raw, std::string name)
 {
+  assert(info.mip_count > 0 && info.layer_count > 0 && "Invalid mip or array count");
   const auto physical_id = images_.size();
-  images_.emplace_back(raw, info.state);
+  images_.emplace_back(raw, info.state, info.mip_count, info.layer_count);
 
   const auto id = resources_.size();
-  resources_.emplace_back(Image{info.type, info.size, info.format}, physical_id, std::move(name));
+  resources_.emplace_back(Image{info.type, info.size, info.format, info.mip_count, info.layer_count}, physical_id,
+                          std::move(name));
 
   return ResourceID{ResourceType::Import, id};
 }
@@ -67,18 +69,22 @@ fwrk::ResourceID fwrk::Context::import_buffer(const BufferImportInfo& info, VkBu
 void fwrk::Context::update_image(const ResourceID resource, const ImageImportInfo& info, VkImage raw)
 {
   if (!resource || resource.type() != ResourceType::Import || resource.type() == ResourceType::Transient) return;
+  assert(info.mip_count > 0 && info.layer_count > 0 && "Invalid mip or array count");
   Resource& res = resources_.at(resource.index());
   if (!std::holds_alternative<Image>(res.desc)) return;
 
   PhysicalImage& phys = images_.at(res.physical_id);
   destroy_views(phys);
 
-  auto& [type, size, format] = std::get<Image>(res.desc);
+  auto& [type, size, format, mips, layers] = std::get<Image>(res.desc);
   type = info.type;
   size = info.size;
   format = info.format;
+  mips = info.mip_count;
+  layers = info.layer_count;
 
-  phys.state = info.state;
+  phys.uniform_state = info.state;
+  phys.states.clear();
   phys.handle = raw;
 }
 
@@ -164,12 +170,15 @@ void fwrk::Context::allocate_transients(std::vector<Graph::TransientInfo> infos)
   for (auto& [desc, name]: infos) {
     if (std::holds_alternative<ImageCreateInfo>(desc)) {
       auto& info = std::get<ImageCreateInfo>(desc);
+      assert(info.mips > 0 && info.layers > 0 && "Invalid mip or layer count");
       const auto physical_id = transient_images_.size();
       for (uint32_t i = 0; i < frames_in_flight_; i++) {
         std::optional<PhysicalImage> physical = alloc_->create_image(info);
-        transient_images_.push_back(physical.value_or(PhysicalImage{VK_NULL_HANDLE, PhysicalState::Undefined}));
+        transient_images_.push_back(
+            physical.value_or(PhysicalImage{VK_NULL_HANDLE, PhysicalState::Undefined, info.mips, info.layers}));
       }
-      transients_.emplace_back(Image{info.type, info.size, info.format}, physical_id, std::move(name));
+      transients_.emplace_back(Image{info.type, info.size, info.format, info.mips, info.layers}, physical_id,
+                               std::move(name));
     } else if (std::holds_alternative<BufferCreateInfo>(desc)) {
       auto& info = std::get<BufferCreateInfo>(desc);
       const auto physical_id = transient_buffers_.size();

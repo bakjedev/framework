@@ -22,6 +22,8 @@ TEST(Framework, SimpleTest)
   const auto img = context.import_image({.type = VK_IMAGE_TYPE_2D,
                                          .size = {1920, 1080, 1},
                                          .format = VK_FORMAT_R32G32B32A32_SFLOAT,
+                                         .mip_count = 1,
+                                         .layer_count = 1,
                                          .state = fwrk::PhysicalState::Undefined},
                                         nullptr, "RenderTarget");
 

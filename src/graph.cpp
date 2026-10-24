@@ -104,6 +104,8 @@ bool fwrk::Graph::compile()
   for (auto& [_, info]: resource_deps_) {
     std::ranges::sort(info.write_passes);
     std::ranges::sort(info.read_passes);
+    info.write_passes.erase(std::ranges::unique(info.write_passes).begin(), info.write_passes.end());
+    info.read_passes.erase(std::ranges::unique(info.read_passes).begin(), info.read_passes.end());
     const auto write_count = static_cast<uint32_t>(info.write_passes.size());
     const auto read_count = static_cast<uint32_t>(info.read_passes.size());
 
@@ -216,22 +218,15 @@ bool fwrk::Graph::compile()
   // ----------------------------------------
   // Create pass barriers and rendering infos
   // ----------------------------------------
-  compiled_passes_.resize(pass_count);
+  compiled_passes_.reserve(pass_count);
 
   for (const uint32_t pass_id: sorted_pass_ids_) {
     Pass& pass = passes_[pass_id];
-    auto& [dependencies, rendering, debug, name, func] = compiled_passes_[pass_id];
+    auto& [dependencies, rendering, name, func] = compiled_passes_.emplace_back();
     auto& [image_barriers, buffer_barriers] = dependencies;
 
     name = std::move(pass.name);
     func = std::move(pass.func);
-
-    debug = VkDebugUtilsLabelEXT{
-        .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT,
-        .pNext = nullptr,
-        .pLabelName = name.c_str(),
-        .color = {1.0f, 1.0f, 1.0f, 1.0f},
-    };
 
     // image memory barriers
     for (const ImageAccess& image_access: pass.images) {
@@ -262,6 +257,7 @@ bool fwrk::Graph::compile()
         info.store_op = store_op;
         if (resolve) {
           const ImageAccess& resolve_access = pass.images.at(*resolve);
+          info.resolve.emplace();
           info.resolve->resource = resolve_access.resource;
           info.resolve->subresource.aspectMask = resolve_access.aspect;
           info.resolve->subresource.baseArrayLayer = resolve_access.base_layer;
@@ -337,7 +333,7 @@ void fwrk::Graph::execute(VkCommandBuffer cmd, const uint32_t frame_index)
     // -----------------------------------------
     // Begin Debug Labels and Starting Timestamp
     // -----------------------------------------
-    if (context_->begin_debug_pfn_) context_->begin_debug_pfn_(cmd, &pass.debug);
+    if (context_->begin_debug_pfn_) begin_debug_label(cmd, pass.name);
     if (context_->timestamps_)
       vkCmdWriteTimestamp2(cmd, VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT, query_pool->pool, query++);
 
@@ -421,6 +417,11 @@ void fwrk::Graph::create_pass_barriers(const DependencyInfo& deps)
     if (subresource_range.aspectMask == VK_IMAGE_ASPECT_NONE)
       subresource_range.aspectMask = get_aspect_for_format(image.format);
 
+    if (subresource_range.levelCount == VK_REMAINING_MIP_LEVELS)
+      subresource_range.levelCount = image.mip_count - subresource_range.baseMipLevel;
+    if (subresource_range.layerCount == VK_REMAINING_ARRAY_LAYERS)
+      subresource_range.layerCount = image.layer_count - subresource_range.baseArrayLayer;
+
     transition_image(barriers_.images, physical, img_barr.dst_state, subresource_range);
   }
 
@@ -439,9 +440,9 @@ void fwrk::Graph::create_end_barriers()
 
     VkImageSubresourceRange subresource_range = {.aspectMask = get_aspect_for_format(image.format),
                                                  .baseMipLevel = 0,
-                                                 .levelCount = VK_REMAINING_MIP_LEVELS,
+                                                 .levelCount = image.mip_count,
                                                  .baseArrayLayer = 0,
-                                                 .layerCount = VK_REMAINING_ARRAY_LAYERS};
+                                                 .layerCount = image.layer_count};
 
     transition_image(barriers_.images, physical, state, subresource_range);
   }
@@ -505,20 +506,66 @@ void fwrk::Graph::create_rendering(const RenderingInfo& info)
 void fwrk::Graph::transition_image(std::vector<VkImageMemoryBarrier2>& barriers, PhysicalImage& image,
                                    const PhysicalState& state, const VkImageSubresourceRange& subresource_range)
 {
-  if (image.state == state) return;
-  barriers.push_back({.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-                      .pNext = nullptr,
-                      .srcStageMask = image.state.stages,
-                      .srcAccessMask = image.state.access,
-                      .dstStageMask = state.stages,
-                      .dstAccessMask = state.access,
-                      .oldLayout = image.state.layout,
-                      .newLayout = state.layout,
-                      .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-                      .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-                      .image = image.handle,
-                      .subresourceRange = subresource_range});
-  image.state = state;
+  constexpr auto make_barrier = [](const PhysicalImage& img, const PhysicalState& dst,
+                                   const VkImageSubresourceRange& range) {
+    return VkImageMemoryBarrier2{.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+                                 .pNext = nullptr,
+                                 .srcStageMask = img.uniform_state.stages,
+                                 .srcAccessMask = img.uniform_state.access,
+                                 .dstStageMask = dst.stages,
+                                 .dstAccessMask = dst.access,
+                                 .oldLayout = img.uniform_state.layout,
+                                 .newLayout = dst.layout,
+                                 .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                                 .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                                 .image = img.handle,
+                                 .subresourceRange = range};
+  };
+
+  const bool full_range = subresource_range.baseMipLevel == 0 && subresource_range.levelCount == image.levels &&
+                          subresource_range.baseArrayLayer == 0 && subresource_range.layerCount == image.layers;
+
+  // if all layers/mips are the same layout
+  if (image.is_state_uniform()) {
+    // if were going over all layers
+    if (full_range) {
+      if (image.uniform_state != state) barriers.push_back(make_barrier(image, state, subresource_range));
+      image.uniform_state = state;
+      return;
+    }
+    // if not, were going to non-uniform, so first fill the list with the uniform state
+    image.states.assign(image.levels * image.layers, image.uniform_state);
+  }
+
+  // one barrier per mip
+  for (uint32_t mip = subresource_range.baseMipLevel;
+       mip < subresource_range.baseMipLevel + subresource_range.levelCount; ++mip) {
+    const uint32_t layer_start = subresource_range.baseArrayLayer;
+    const uint32_t layer_end = layer_start + subresource_range.layerCount;
+
+    // group layers that need to transition
+    uint32_t layer = layer_start;
+    while (layer < layer_end) {
+      const PhysicalState src = image.state_at(mip, layer);
+      uint32_t end = layer + 1;
+      while (end < layer_end && image.state_at(mip, end) == src) end++;
+      if (src != state) {
+        barriers.push_back(make_barrier(image, state,
+                                        {.aspectMask = subresource_range.aspectMask,
+                                         .baseMipLevel = mip,
+                                         .levelCount = 1,
+                                         .baseArrayLayer = layer,
+                                         .layerCount = end - layer}));
+      }
+      for (uint32_t i = layer; i < end; i++) image.state_at(mip, i) = state;
+      layer = end;
+    }
+  }
+
+  if (full_range) {
+    image.uniform_state = state;
+    image.states.clear();
+  }
 }
 
 void fwrk::Graph::transition_buffer(std::vector<VkBufferMemoryBarrier2>& barriers, PhysicalBuffer& buffer,
@@ -537,6 +584,17 @@ void fwrk::Graph::transition_buffer(std::vector<VkBufferMemoryBarrier2>& barrier
                       .offset = offset,
                       .size = size});
   buffer.state = state;
+}
+
+void fwrk::Graph::begin_debug_label(VkCommandBuffer cmd, const std::string& name) const
+{
+  const VkDebugUtilsLabelEXT debug = {
+      .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT,
+      .pNext = nullptr,
+      .pLabelName = name.c_str(),
+      .color = {1.0f, 1.0f, 1.0f, 1.0f},
+  };
+  context_->begin_debug_pfn_(cmd, &debug);
 }
 
 void fwrk::Graph::get_timestamps(const QueryPool& pool)

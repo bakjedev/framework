@@ -30,7 +30,7 @@ struct MyAllocator : fwrk::Allocator {
     vmaCreateImage(allocator, &create_info, &alloc_info, &image, &allocation, nullptr);
 
     image_to_allocation[image] = allocation;
-    return fwrk::PhysicalImage{image, fwrk::PhysicalState::Undefined};
+    return fwrk::PhysicalImage{image, fwrk::PhysicalState::Undefined, img_info.mips, img_info.layers};
   }
   std::optional<fwrk::PhysicalBuffer> create_buffer(const fwrk::BufferCreateInfo&) override { return {}; }
   void destroy_image(fwrk::PhysicalImage& img) override
@@ -84,6 +84,8 @@ int main()
       const fwrk::ImageImportInfo color_img_desc{.type = VK_IMAGE_TYPE_2D,
                                                  .size = {swapchain.extent.width, swapchain.extent.height, 1},
                                                  .format = swapchain.format,
+                                                 .mip_count = 1,
+                                                 .layer_count = 1,
                                                  .state = fwrk::PhysicalState::Undefined};
       swapchain_imports.resize(swapchain.images.size());
       for (uint32_t i = 0; i < swapchain.images.size(); i++) {
@@ -98,6 +100,8 @@ int main()
       const fwrk::ImageImportInfo depth_img_desc{.type = VK_IMAGE_TYPE_2D,
                                                  .size = {depth.extent.width, depth.extent.height, 1},
                                                  .format = depth.format,
+                                                 .mip_count = 1,
+                                                 .layer_count = 1,
                                                  .state = fwrk::PhysicalState::Undefined};
       if (depth_import) {
         context.update_image(depth_import, depth_img_desc, depth.image);

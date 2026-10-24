@@ -7,7 +7,7 @@
 
 fwrk::GraphicsPassBuilder& fwrk::GraphicsPassBuilder::set_color_attachment(const AttachmentInfo& info)
 {
-  if (!try_access(info.resource.id)) return *this;
+  if (!try_access_image(info)) return *this;
   auto& res = graph_->resource_deps_[info.resource.id];
 
   VkImageAspectFlags aspect = info.aspect;
@@ -33,7 +33,7 @@ fwrk::GraphicsPassBuilder& fwrk::GraphicsPassBuilder::set_color_attachment(const
   res.write_passes.push_back(id_);
 
   if (info.resolve) {
-    if (!try_access(info.resolve->resource)) return *this;
+    if (!try_access_image(info, true)) return *this;
     auto& res_olve = graph_->resource_deps_[info.resolve->resource];
 
     const auto idx = static_cast<uint32_t>(pass_->images.size());
@@ -53,7 +53,7 @@ fwrk::GraphicsPassBuilder& fwrk::GraphicsPassBuilder::set_color_attachment(const
 
 fwrk::GraphicsPassBuilder& fwrk::GraphicsPassBuilder::set_depth_attachment(const AttachmentInfo& info)
 {
-  if (!try_access(info.resource.id)) return *this;
+  if (!try_access_image(info)) return *this;
   auto& res = graph_->resource_deps_[info.resource.id];
 
   VkImageAspectFlags aspect = info.aspect;
@@ -80,7 +80,7 @@ fwrk::GraphicsPassBuilder& fwrk::GraphicsPassBuilder::set_depth_attachment(const
   res.write_passes.push_back(id_);
 
   if (info.resolve) {
-    if (!try_access(info.resolve->resource)) return *this;
+    if (!try_access_image(info, true)) return *this;
     auto& res_olve = graph_->resource_deps_[info.resolve->resource];
 
     const auto idx = static_cast<uint32_t>(pass_->images.size());
@@ -112,7 +112,7 @@ fwrk::GraphicsPassBuilder& fwrk::GraphicsPassBuilder::set_index_buffer_input(con
 
 fwrk::GraphicsPassBuilder& fwrk::GraphicsPassBuilder::set_indirect_buffer_input(const BufferInfo& info)
 {
-  if (!try_access(info.resource.id)) return *this;
+  if (!try_access_buffer(info.resource.id, info.offset, info.size)) return *this;
   auto& res = graph_->resource_deps_[info.resource.id];
   res.read_passes.push_back(id_);
   set_possible_explicit_read(info.resource.pass, res);
@@ -144,7 +144,7 @@ fwrk::GraphicsPassBuilder& fwrk::GraphicsPassBuilder::set_render_view(const uint
 template<typename T>
 T& fwrk::PassBuilder<T>::set_image_read(const ImageInfo& info)
 {
-  if (!try_access(info.resource.id)) return static_cast<T&>(*this);
+  if (!try_access_image(info)) return static_cast<T&>(*this);
   auto& res = graph_->resource_deps_[info.resource.id];
   res.read_passes.push_back(id_);
   set_possible_explicit_read(info.resource.pass, res);
@@ -175,7 +175,7 @@ T& fwrk::PassBuilder<T>::set_storage_buffer_read(const BufferInfo& info)
 template<typename T>
 T& fwrk::PassBuilder<T>::set_storage_buffer_write(const BufferInfo& info)
 {
-  if (!try_access(info.resource.id)) return static_cast<T&>(*this);
+  if (!try_access_buffer(info.resource.id, info.offset, info.size)) return static_cast<T&>(*this);
   auto& res = graph_->resource_deps_[info.resource.id];
 
   BufferAccess& buffer = pass_->buffers.emplace_back(info.resource.id, info.size, info.offset,
@@ -192,7 +192,7 @@ T& fwrk::PassBuilder<T>::set_storage_buffer_write(const BufferInfo& info)
 template<typename T>
 T& fwrk::PassBuilder<T>::set_storage_image_read(const ImageInfo& info)
 {
-  if (!try_access(info.resource.id)) return static_cast<T&>(*this);
+  if (!try_access_image(info)) return static_cast<T&>(*this);
   auto& res = graph_->resource_deps_[info.resource.id];
   res.read_passes.push_back(id_);
   set_possible_explicit_read(info.resource.pass, res);
@@ -209,7 +209,7 @@ T& fwrk::PassBuilder<T>::set_storage_image_read(const ImageInfo& info)
 template<typename T>
 T& fwrk::PassBuilder<T>::set_storage_image_write(const ImageInfo& info)
 {
-  if (!try_access(info.resource.id)) return static_cast<T&>(*this);
+  if (!try_access_image(info)) return static_cast<T&>(*this);
   auto& res = graph_->resource_deps_[info.resource.id];
 
   ImageAccess& image = pass_->images.emplace_back(
@@ -227,7 +227,7 @@ T& fwrk::PassBuilder<T>::set_storage_image_write(const ImageInfo& info)
 template<typename T>
 T& fwrk::PassBuilder<T>::set_image_transfer_src(const ImageInfo& info)
 {
-  if (!try_access(info.resource.id)) return static_cast<T&>(*this);
+  if (!try_access_image(info)) return static_cast<T&>(*this);
   auto& res = graph_->resource_deps_[info.resource.id];
 
   res.read_passes.push_back(id_);
@@ -247,7 +247,7 @@ T& fwrk::PassBuilder<T>::set_image_transfer_src(const ImageInfo& info)
 template<typename T>
 T& fwrk::PassBuilder<T>::set_image_transfer_dst(const ImageInfo& info)
 {
-  if (!try_access(info.resource.id)) return static_cast<T&>(*this);
+  if (!try_access_image(info)) return static_cast<T&>(*this);
   auto& res = graph_->resource_deps_[info.resource.id];
 
   ImageAccess& image = pass_->images.emplace_back(
@@ -265,7 +265,7 @@ T& fwrk::PassBuilder<T>::set_image_transfer_dst(const ImageInfo& info)
 template<typename T>
 T& fwrk::PassBuilder<T>::set_buffer_transfer_src(const BufferInfo& info)
 {
-  if (!try_access(info.resource.id)) return static_cast<T&>(*this);
+  if (!try_access_buffer(info.resource.id, info.offset, info.size)) return static_cast<T&>(*this);
   auto& res = graph_->resource_deps_[info.resource.id];
 
   res.read_passes.push_back(id_);
@@ -284,7 +284,7 @@ T& fwrk::PassBuilder<T>::set_buffer_transfer_src(const BufferInfo& info)
 template<typename T>
 T& fwrk::PassBuilder<T>::set_buffer_transfer_dst(const BufferInfo& info)
 {
-  if (!try_access(info.resource.id)) return static_cast<T&>(*this);
+  if (!try_access_buffer(info.resource.id, info.offset, info.size)) return static_cast<T&>(*this);
   auto& res = graph_->resource_deps_[info.resource.id];
 
   BufferAccess& buffer = pass_->buffers.emplace_back(info.resource.id, info.size, info.offset,
@@ -306,9 +306,9 @@ T& fwrk::PassBuilder<T>::set_execute(std::function<void(VkCommandBuffer)> func)
 }
 
 template<typename T>
-void fwrk::PassBuilder<T>::set_buffer_read(const BufferInfo& info, const VkAccessFlags2 access)
+void fwrk::PassBuilder<T>::set_buffer_read(const BufferInfo& info, const VkAccessFlags2 access) const
 {
-  if (!try_access(info.resource.id)) return;
+  if (!try_access_buffer(info.resource.id, info.offset, info.size)) return;
   auto& res = graph_->resource_deps_[info.resource.id];
   res.read_passes.push_back(id_);
   set_possible_explicit_read(info.resource.pass, res);
@@ -342,10 +342,42 @@ void fwrk::PassBuilder<T>::set_possible_read(const ResourceAccess& resource, Res
 }
 
 template<typename T>
-bool fwrk::PassBuilder<T>::try_access(const ResourceID resource)
+bool fwrk::PassBuilder<T>::try_access_image(const ResourceID resource, const VkImageAspectFlags aspect,
+                                            const uint32_t base_level, const uint32_t level_count,
+                                            const uint32_t base_layer, const uint32_t layer_count) const
 {
-  if (accessed_.contains(resource)) return false;
-  accessed_.insert(resource);
+  for (const ImageAccess& other: pass_->images) {
+    if (other.resource != resource) continue;
+    if (other.aspect && aspect && !(other.aspect & aspect)) continue;
+    if (!ranges_overlap(other.base_level, other.level_count, base_level, level_count)) continue;
+    if (!ranges_overlap(other.base_layer, other.layer_count, base_layer, layer_count)) continue;
+    return false;
+  }
+  return true;
+}
+
+template<typename T>
+bool fwrk::PassBuilder<T>::try_access_image(const AttachmentInfo& info, const bool resolve) const
+{
+  return try_access_image(info.resource.id, info.aspect, resolve ? info.resolve->base_level : info.base_level, 1,
+                          resolve ? info.resolve->base_layer : info.base_layer, 1);
+}
+
+template<typename T>
+bool fwrk::PassBuilder<T>::try_access_image(const ImageInfo& info) const
+{
+  return try_access_image(info.resource.id, info.aspect, info.base_level, info.level_count, info.base_layer,
+                          info.layer_count);
+}
+
+template<typename T>
+bool fwrk::PassBuilder<T>::try_access_buffer(const ResourceID resource, const VkDeviceSize offset,
+                                             const VkDeviceSize size) const
+{
+  for (const BufferAccess& other: pass_->buffers) {
+    if (other.resource != resource) continue;
+    if (ranges_overlap(other.offset, other.size, offset, size)) return false;
+  }
   return true;
 }
 
@@ -354,9 +386,26 @@ void fwrk::PassBuilder<T>::set_possible_explicit_read(const std::optional<uint32
                                                       ResourceDependencies& deps) const
 {
   if (pass) {
-    assert(*pass < id_ && "Invalid pass id for explicit read dep");
+    assert(*pass < id_ && !deps.read_deps.contains(id_) && "Invalid or duplicate pass id for explicit read dep");
     deps.read_deps[id_] = *pass;
   }
+}
+
+template<typename T>
+bool fwrk::PassBuilder<T>::ranges_overlap(const uint32_t x, const uint32_t x_count, const uint32_t y,
+                                          const uint32_t y_count)
+{
+  return x < (y_count == ~0U ? UINT64_MAX : y + y_count) && y < (x_count == ~0U ? UINT64_MAX : x + x_count);
+}
+
+template<typename T>
+bool fwrk::PassBuilder<T>::ranges_overlap(VkDeviceSize x, VkDeviceSize x_size, VkDeviceSize y, VkDeviceSize y_size)
+{
+  constexpr auto end = [](const VkDeviceSize offset, const VkDeviceSize size) {
+    if (size == ~0ULL || size > UINT64_MAX - offset) return UINT64_MAX;
+    return offset + size;
+  };
+  return x < end(y, y_size) && y < end(x, x_size);
 }
 
 template class fwrk::PassBuilder<fwrk::GraphicsPassBuilder>;

@@ -78,13 +78,22 @@ namespace fwrk {
     Pass* pass_;
     Graph* graph_;
     uint32_t id_;
-    std::unordered_set<ResourceID> accessed_;
 
-    void set_buffer_read(const BufferInfo& info, VkAccessFlags2 access);
+    void set_buffer_read(const BufferInfo& info, VkAccessFlags2 access) const;
     void set_stages_fallback(VkPipelineStageFlags2& stages) const;
     void set_possible_read(const ResourceAccess& resource, ResourceDependencies& deps, VkAccessFlags2& access,
                            VkAccessFlags2 access_flags) const;
-    bool try_access(ResourceID resource);
+
+    [[nodiscard]] bool try_access_image(ResourceID resource, VkImageAspectFlags aspect, uint32_t base_level,
+                                        uint32_t level_count, uint32_t base_layer, uint32_t layer_count) const;
+    [[nodiscard]] bool try_access_image(const AttachmentInfo& info, bool resolve = false) const;
+    [[nodiscard]] bool try_access_image(const ImageInfo& info) const;
+    static bool ranges_overlap(uint32_t x, uint32_t x_count, uint32_t y, uint32_t y_count);
+
+    [[nodiscard]] bool try_access_buffer(ResourceID resource, VkDeviceSize offset, VkDeviceSize size) const;
+    static bool ranges_overlap(VkDeviceSize x, VkDeviceSize x_size, VkDeviceSize y, VkDeviceSize y_size);
+
+
     void set_possible_explicit_read(std::optional<uint32_t> pass, ResourceDependencies& deps) const;
   };
 

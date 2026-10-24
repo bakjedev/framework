@@ -114,7 +114,6 @@ namespace fwrk {
     struct CompiledPass {
       DependencyInfo deps;
       std::optional<RenderingInfo> render;
-      VkDebugUtilsLabelEXT debug;
       std::string name;
       std::function<void(VkCommandBuffer cmd)> func;
     };
@@ -167,6 +166,8 @@ namespace fwrk {
 
     static void transition_buffer(std::vector<VkBufferMemoryBarrier2>& barriers, PhysicalBuffer& buffer,
                                   const PhysicalState& state, VkDeviceSize offset, VkDeviceSize size);
+
+    void begin_debug_label(VkCommandBuffer cmd, const std::string& name) const;
 
     void get_timestamps(const QueryPool& pool);
     void reset_timestamps(QueryPool& pool, VkCommandBuffer cmd, uint32_t count) const;
