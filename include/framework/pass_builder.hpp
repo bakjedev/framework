@@ -84,8 +84,8 @@ namespace fwrk {
     void set_possible_read(const ResourceAccess& resource, ResourceDependencies& deps, VkAccessFlags2& access,
                            VkAccessFlags2 access_flags) const;
 
-    [[nodiscard]] bool try_access_image(ResourceID resource, VkImageAspectFlags aspect, uint32_t base_level,
-                                        uint32_t level_count, uint32_t base_layer, uint32_t layer_count) const;
+    [[nodiscard]] bool try_access_image_internal(ResourceID resource, VkImageAspectFlags aspect, uint32_t base_level,
+                                                 uint32_t level_count, uint32_t base_layer, uint32_t layer_count) const;
     [[nodiscard]] bool try_access_image(const AttachmentInfo& info, bool resolve = false) const;
     [[nodiscard]] bool try_access_image(const ImageInfo& info) const;
     static bool ranges_overlap(uint32_t x, uint32_t x_count, uint32_t y, uint32_t y_count);

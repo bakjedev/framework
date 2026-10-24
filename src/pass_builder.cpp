@@ -342,9 +342,9 @@ void fwrk::PassBuilder<T>::set_possible_read(const ResourceAccess& resource, Res
 }
 
 template<typename T>
-bool fwrk::PassBuilder<T>::try_access_image(const ResourceID resource, const VkImageAspectFlags aspect,
-                                            const uint32_t base_level, const uint32_t level_count,
-                                            const uint32_t base_layer, const uint32_t layer_count) const
+bool fwrk::PassBuilder<T>::try_access_image_internal(const ResourceID resource, const VkImageAspectFlags aspect,
+                                                     const uint32_t base_level, const uint32_t level_count,
+                                                     const uint32_t base_layer, const uint32_t layer_count) const
 {
   for (const ImageAccess& other: pass_->images) {
     if (other.resource != resource) continue;
@@ -359,15 +359,15 @@ bool fwrk::PassBuilder<T>::try_access_image(const ResourceID resource, const VkI
 template<typename T>
 bool fwrk::PassBuilder<T>::try_access_image(const AttachmentInfo& info, const bool resolve) const
 {
-  return try_access_image(info.resource.id, info.aspect, resolve ? info.resolve->base_level : info.base_level, 1,
-                          resolve ? info.resolve->base_layer : info.base_layer, 1);
+  return try_access_image_internal(info.resource.id, info.aspect, resolve ? info.resolve->base_level : info.base_level,
+                                   1, resolve ? info.resolve->base_layer : info.base_layer, 1);
 }
 
 template<typename T>
 bool fwrk::PassBuilder<T>::try_access_image(const ImageInfo& info) const
 {
-  return try_access_image(info.resource.id, info.aspect, info.base_level, info.level_count, info.base_layer,
-                          info.layer_count);
+  return try_access_image_internal(info.resource.id, info.aspect, info.base_level, info.level_count, info.base_layer,
+                                   info.layer_count);
 }
 
 template<typename T>

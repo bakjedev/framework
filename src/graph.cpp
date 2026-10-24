@@ -506,19 +506,19 @@ void fwrk::Graph::create_rendering(const RenderingInfo& info)
 void fwrk::Graph::transition_image(std::vector<VkImageMemoryBarrier2>& barriers, PhysicalImage& image,
                                    const PhysicalState& state, const VkImageSubresourceRange& subresource_range)
 {
-  constexpr auto make_barrier = [](const PhysicalImage& img, const PhysicalState& dst,
+  constexpr auto make_barrier = [](VkImage handle, const PhysicalState& src, const PhysicalState& dst,
                                    const VkImageSubresourceRange& range) {
     return VkImageMemoryBarrier2{.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
                                  .pNext = nullptr,
-                                 .srcStageMask = img.uniform_state.stages,
-                                 .srcAccessMask = img.uniform_state.access,
+                                 .srcStageMask = src.stages,
+                                 .srcAccessMask = src.access,
                                  .dstStageMask = dst.stages,
                                  .dstAccessMask = dst.access,
-                                 .oldLayout = img.uniform_state.layout,
+                                 .oldLayout = src.layout,
                                  .newLayout = dst.layout,
                                  .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
                                  .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-                                 .image = img.handle,
+                                 .image = handle,
                                  .subresourceRange = range};
   };
 
@@ -529,7 +529,8 @@ void fwrk::Graph::transition_image(std::vector<VkImageMemoryBarrier2>& barriers,
   if (image.is_state_uniform()) {
     // if were going over all layers
     if (full_range) {
-      if (image.uniform_state != state) barriers.push_back(make_barrier(image, state, subresource_range));
+      if (image.uniform_state != state)
+        barriers.push_back(make_barrier(image.handle, image.uniform_state, state, subresource_range));
       image.uniform_state = state;
       return;
     }
@@ -550,7 +551,7 @@ void fwrk::Graph::transition_image(std::vector<VkImageMemoryBarrier2>& barriers,
       uint32_t end = layer + 1;
       while (end < layer_end && image.state_at(mip, end) == src) end++;
       if (src != state) {
-        barriers.push_back(make_barrier(image, state,
+        barriers.push_back(make_barrier(image.handle, src, state,
                                         {.aspectMask = subresource_range.aspectMask,
                                          .baseMipLevel = mip,
                                          .levelCount = 1,
